@@ -15,9 +15,10 @@ void BellmanFord( Edge edges[], int edgenum, int nodes, int source)
 		 std::cout <<"Failed, exit program \n";
        exit(1);
      }//end if
-int i;
-     for ( i=0; i < nodes; ++i)
+     int i;
+     for ( i=0; i < nodes; ++i) {
        distance[i] = INFINITY;
+     }
 
      distance[source] = 0;
 
@@ -53,10 +54,8 @@ int find_distance(Edge edges[],int source,int dest,int no_of_edges)
 {
 
 	int i;
-	for(i=0;i<no_of_edges;i++)
-	{
-		if(edges[i].source == source && edges[i].destination == dest)
-		{
+	for(i=0;i<no_of_edges;i++) {
+		if(edges[i].source == source && edges[i].destination == dest) {
 		 return edges[i].weight;
 		}
 	}
@@ -67,35 +66,23 @@ void print_graph( Edge edges[], int edgenum, int nodes)
 {
 int i,j;
 int dest;
-	for(i=0;i<nodes;i++)
-	{
-	printf("\t%c",'A'+i);
+	for(i=0;i<nodes;i++) {
+          printf("\t%c",'A'+i);
 	}
-	for(i=0;i<nodes;i++)
-	{
-		printf("\n%c",'A'+i);
-		for(j=0;j<nodes;j++)
-		{
-         if(i == j)
-		 {
+	for(i=0;i<nodes;i++) {
+	        printf("\n%c",'A'+i);
+		for(j=0;j<nodes;j++) {
+         	if(i == j) {
 		 dest = 0;
-		 }
-		 else
-		 {
-           dest=find_distance(edges,i,j,edgenum);
-		 }
-		 if( dest != INFINITY)
-		 {
+		 } else {
+                     dest=find_distance(edges,i,j,edgenum);
+		 } 
+		 if( dest != INFINITY) {
 		 printf("\t%d",dest);
-		 }
-		 else
-		 {
+		 } else {
 		 printf("\t%c",36);
 		 }
 		}
-
-		
-
 	}
 
 }
