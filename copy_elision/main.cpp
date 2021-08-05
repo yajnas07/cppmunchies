@@ -25,6 +25,11 @@ copiable_class creator_rvo()
     return copiable_class();
 }
 
+void pass_byvalue_func(copiable_class ob)
+{
+
+}
+
 
 int main(int argc,char * argv[])
 {
@@ -32,4 +37,8 @@ int main(int argc,char * argv[])
     //But compiler optimizes out call to copy constructor for temporary objects
     copiable_class instance1 =  creator_rvo();
     copiable_class instance2 =  creator_nrvo();
+
+    cout << "Calling function" << endl;
+    pass_byvalue_func(copiable_class());
+    cout << "Returned from function" << endl;
 }
