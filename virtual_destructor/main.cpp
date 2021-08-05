@@ -46,11 +46,11 @@ int main(int argc,char * argv[])
     base_with_vd * int_ptr = new derived_tmpt<int>("int_ptr",100); 
     base_with_vd * float_ptr = new derived_tmpt<float>("float_ptr",10.6); 
 
-    cout << "deleting bool_ptr, this will not delete complete object" << endl;
+    cout << "deleting bool_ptr, this need dynamic casting to derived class" << endl;
     delete dynamic_cast< derived_tmpt<bool>* >(bool_ptr);
-    cout << "deleting int_ptr, this will delete complete object" << endl;
+    cout << "deleting int_ptr, this will delete complete object without need for casting" << endl;
     delete int_ptr;
-    cout << "deleting float_ptr, this will delete complete object" << endl;
+    cout << "deleting float_ptr, this will delete complete object without need for casting" << endl;
     delete float_ptr;
 
 }
