@@ -6,7 +6,7 @@
 // single uniform interface without the host knowing the concrete types.
 //
 // Concepts shown:
-//   - IPlugin: the type-erased interface (the “concept”)
+//   - IPlugin: the type-erased interface (the "concept")
 //   - PluginRegistry: owns and dispatches to type-erased plugins
 //   - PluginHandle<T>: RAII wrapper for plugin lifetime
 //   - Plugin pipeline: chain plugins, short-circuit on failure
@@ -38,7 +38,7 @@
 #include <typeindex>
 
 // =============================================================================
-// PART 1: The Plugin Interface — the “erased concept”
+// PART 1: The Plugin Interface — the "erased concept"
 //
 // IPlugin defines the only operations the host ever calls.
 // Concrete plugin types are completely hidden behind this interface.
@@ -52,10 +52,10 @@ std::string payload;
 bool        valid  = true;
 int         status = 0;
 
-```
+
 // Metadata bag — heterogeneous, also type-erased (reuse from prev example)
 std::unordered_map<std::string, std::string> meta;
-```
+
 
 };
 
@@ -82,7 +82,7 @@ class IPlugin {
 public:
 virtual ~IPlugin() = default;
 
-```
+
 // Lifecycle
 virtual bool        initialize(const std::string& config) = 0;
 virtual void        shutdown() = 0;
@@ -97,7 +97,7 @@ virtual bool process(Message& msg) = 0;
 
 // Optional: human-readable status for diagnostics
 virtual std::string status_report() const { return "no report"; }
-```
+
 
 };
 
@@ -118,9 +118,9 @@ public:
 // a unique_ptr to any concrete plugin type.
 void register_plugin(std::unique_ptr<IPlugin> plugin) {
 if (!plugin)
-throw std::invalid_argument(“PluginRegistry: null plugin”);
+throw std::invalid_argument("PluginRegistry: null plugin");
 
-```
+
     const std::string key = plugin->name();
     if (plugins_.count(key))
         throw std::runtime_error("PluginRegistry: plugin already registered: " + key);
@@ -189,7 +189,7 @@ void print_status() const {
 }
 
 size_t size() const { return plugins_.size(); }
-```
+
 
 private:
 std::unordered_map<std::string, std::unique_ptr<IPlugin>> plugins_;
@@ -212,15 +212,15 @@ int                      count_   = 0;
 
 public:
 bool initialize(const std::string& config) override {
-verbose_ = (config.find(“verbose”) != std::string::npos);
-std::cout << “    LoggerPlugin: init (verbose=” << verbose_ << “)\n”;
+verbose_ = (config.find("verbose") != std::string::npos);
+std::cout << "    LoggerPlugin: init (verbose=" << verbose_ << ")\n";
 return true;
 }
 void shutdown() override {
-std::cout << “    LoggerPlugin: shutdown — logged “ << count_ << “ message(s)\n”;
+std::cout << "    LoggerPlugin: shutdown — logged " << count_ << " message(s)\n";
 }
 
-```
+
 std::string name()    const override { return "Logger"; }
 std::string version() const override { return "1.0"; }
 Capability  capabilities() const override { return Capability::Logging; }
@@ -241,7 +241,7 @@ std::string status_report() const override {
 
 // Plugin-specific method (not on IPlugin) — accessible if you know the type
 const std::vector<std::string>& get_log() const { return log_; }
-```
+
 
 };
 
@@ -253,15 +253,15 @@ int    accepted_        = 0;
 
 public:
 bool initialize(const std::string&) override {
-std::cout << “    ValidatorPlugin: init (max_len=” << max_payload_len_ << “)\n”;
+std::cout << "    ValidatorPlugin: init (max_len=" << max_payload_len_ << ")\n";
 return true;
 }
 void shutdown() override {
-std::cout << “    ValidatorPlugin: shutdown — accepted=” << accepted_
-<< “ rejected=” << rejected_ << “\n”;
+std::cout << "    ValidatorPlugin: shutdown — accepted=" << accepted_
+<< " rejected=" << rejected_ << "\n";
 }
 
-```
+
 std::string name()    const override { return "Validator"; }
 std::string version() const override { return "2.1"; }
 Capability  capabilities() const override { return Capability::Validation; }
@@ -296,7 +296,7 @@ std::string status_report() const override {
     return "accepted=" + std::to_string(accepted_)
          + " rejected=" + std::to_string(rejected_);
 }
-```
+
 
 };
 
@@ -306,7 +306,7 @@ bool  uppercase_topic_   = true;
 bool  trim_payload_      = true;
 int   transforms_applied_ = 0;
 
-```
+
 static std::string trim(const std::string& s) {
     size_t start = s.find_first_not_of(" \t\n\r");
     if (start == std::string::npos) return "";
@@ -318,21 +318,21 @@ static std::string to_upper(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), ::toupper);
     return s;
 }
-```
+
 
 public:
 bool initialize(const std::string& config) override {
-uppercase_topic_ = (config.find(“no_upper”) == std::string::npos);
-std::cout << “    TransformerPlugin: init (uppercase_topic=”
-<< uppercase_topic_ << “)\n”;
+uppercase_topic_ = (config.find("no_upper") == std::string::npos);
+std::cout << "    TransformerPlugin: init (uppercase_topic="
+<< uppercase_topic_ << ")\n";
 return true;
 }
 void shutdown() override {
-std::cout << “    TransformerPlugin: shutdown — applied “
-<< transforms_applied_ << “ transform(s)\n”;
+std::cout << "    TransformerPlugin: shutdown — applied "
+<< transforms_applied_ << " transform(s)\n";
 }
 
-```
+
 std::string name()    const override { return "Transformer"; }
 std::string version() const override { return "1.3"; }
 Capability  capabilities() const override { return Capability::Transform; }
@@ -348,7 +348,7 @@ bool process(Message& msg) override {
 std::string status_report() const override {
     return "transforms=" + std::to_string(transforms_applied_);
 }
-```
+
 
 };
 
@@ -358,7 +358,7 @@ class ProfilerPlugin : public IPlugin {
 using Clock    = std::chrono::steady_clock;
 using Duration = std::chrono::microseconds;
 
-```
+
 struct Record {
     std::string topic;
     long        elapsed_us;
@@ -367,19 +367,19 @@ struct Record {
 std::vector<Record>      records_;
 Clock::time_point        start_;
 bool                     timing_active_ = false;
-```
+
 
 public:
 bool initialize(const std::string&) override {
-std::cout << “    ProfilerPlugin: init\n”;
+std::cout << "    ProfilerPlugin: init\n";
 return true;
 }
 void shutdown() override {
-std::cout << “    ProfilerPlugin: shutdown — “ << records_.size()
-<< “ record(s)\n”;
+std::cout << "    ProfilerPlugin: shutdown — " << records_.size()
+<< " record(s)\n";
 }
 
-```
+
 std::string name()    const override { return "Profiler"; }
 std::string version() const override { return "3.0"; }
 Capability  capabilities() const override { return Capability::Profiling; }
@@ -407,7 +407,7 @@ std::string status_report() const override {
 
 // Plugin-specific method — only accessible if caller knows concrete type
 const std::vector<Record>& records() const { return records_; }
-```
+
 
 };
 
@@ -416,14 +416,14 @@ const std::vector<Record>& records() const { return records_; }
 // =============================================================================
 
 void separator(const std::string& title) {
-std::cout << “\n=== “ << title << “ ===\n”;
+std::cout << "\n=== " << title << " ===\n";
 }
 
 // ── Test 1: Basic pipeline — all four plugins, valid message ─────────────────
 void test_basic_pipeline() {
-separator(“Test 1: Basic pipeline”);
+separator("Test 1: Basic pipeline");
 
-```
+
 PluginRegistry registry;
 registry.register_plugin(std::make_unique<LoggerPlugin>());
 registry.register_plugin(std::make_unique<ValidatorPlugin>());
@@ -453,15 +453,15 @@ registry.print_status();
 registry.shutdown_all();
 
 std::cout << "  PASS: valid message processed through all 4 plugins\n";
-```
+
 
 }
 
 // ── Test 2: Validator halts pipeline on empty topic ───────────────────────────
 void test_validation_halt() {
-separator(“Test 2: Validator halts pipeline on invalid message”);
+separator("Test 2: Validator halts pipeline on invalid message");
 
-```
+
 PluginRegistry registry;
 registry.register_plugin(std::make_unique<LoggerPlugin>());
 registry.register_plugin(std::make_unique<ValidatorPlugin>());
@@ -485,15 +485,15 @@ std::cout << "  status : " << msg.status << " (expected 400)\n";
 std::cout << "  PASS: pipeline halted correctly, Transformer did not run\n";
 
 registry.shutdown_all();
-```
+
 
 }
 
 // ── Test 3: Payload too long ──────────────────────────────────────────────────
 void test_payload_too_long() {
-separator(“Test 3: Validator rejects oversized payload”);
+separator("Test 3: Validator rejects oversized payload");
 
-```
+
 PluginRegistry registry;
 registry.register_plugin(std::make_unique<ValidatorPlugin>());
 registry.initialize_all();
@@ -509,15 +509,15 @@ std::cout << "  status : " << msg.status << " (expected 413 Payload Too Large)\n
 std::cout << "  PASS\n";
 
 registry.shutdown_all();
-```
+
 
 }
 
 // ── Test 4: Multiple messages through same registry ───────────────────────────
 void test_multiple_messages() {
-separator(“Test 4: Multiple messages — logger accumulates state”);
+separator("Test 4: Multiple messages — logger accumulates state");
 
-```
+
 auto logger_raw = std::make_unique<LoggerPlugin>();
 LoggerPlugin* logger_ptr = logger_raw.get();   // keep raw ptr before move
 
@@ -554,15 +554,15 @@ std::cout << "  Logger accumulated " << logger_ptr->get_log().size()
 std::cout << "  PASS\n";
 
 registry.shutdown_all();
-```
+
 
 }
 
 // ── Test 5: Capability-filtered dispatch ─────────────────────────────────────
 void test_capability_filter() {
-separator(“Test 5: process_capable — only run Profiler”);
+separator("Test 5: process_capable — only run Profiler");
 
-```
+
 PluginRegistry registry;
 registry.register_plugin(std::make_unique<LoggerPlugin>());
 registry.register_plugin(std::make_unique<ValidatorPlugin>());
@@ -587,15 +587,15 @@ std::cout << "  profiler_us: " << msg.meta["profiler_us"] << "\n";
 std::cout << "  PASS: only Profiler ran, others skipped\n";
 
 registry.shutdown_all();
-```
+
 
 }
 
 // ── Test 6: Duplicate registration is rejected ────────────────────────────────
 void test_duplicate_registration() {
-separator(“Test 6: Duplicate plugin registration rejected”);
+separator("Test 6: Duplicate plugin registration rejected");
 
-```
+
 PluginRegistry registry;
 registry.register_plugin(std::make_unique<LoggerPlugin>());
 registry.initialize_all();
@@ -608,15 +608,15 @@ try {
 }
 
 registry.shutdown_all();
-```
+
 
 }
 
 // ── Test 7: Plugin lookup and downcast ────────────────────────────────────────
 void test_plugin_lookup() {
-separator(“Test 7: Plugin lookup by name + downcast to concrete type”);
+separator("Test 7: Plugin lookup by name + downcast to concrete type");
 
-```
+
 auto profiler_owned = std::make_unique<ProfilerPlugin>();
 
 PluginRegistry registry;
@@ -645,7 +645,7 @@ std::cout << "  downcast OK — " << profiler->records().size()
 std::cout << "  PASS\n";
 
 registry.shutdown_all();
-```
+
 
 }
 
@@ -654,12 +654,12 @@ registry.shutdown_all();
 // =============================================================================
 
 int main() {
-std::cout << “=================================================\n”;
-std::cout << “ Type Erasure — Plugin System Demo\n”;
-std::cout << “ codepuz.com\n”;
-std::cout << “=================================================\n”;
+std::cout << "=================================================\n";
+std::cout << " Type Erasure — Plugin System Demo\n";
+std::cout << " codepuz.com\n";
+std::cout << "=================================================\n";
 
-```
+
 test_basic_pipeline();
 test_validation_halt();
 test_payload_too_long();
@@ -670,6 +670,6 @@ test_plugin_lookup();
 
 std::cout << "\nAll tests passed.\n";
 return 0;
-```
+
 
 }
