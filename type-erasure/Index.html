@@ -1,0 +1,1164 @@
+<!--
+  Type Erasure in C++: Teaching the Compiler to Forget — on Purpose
+  CodePuz blog post — paste into Blogger HTML editor
+-->
+
+<style>
+/* ── Reset Blogger interference ── */
+.te-post, .te-post * {
+  box-sizing: border-box;
+}
+
+/* ── Post container ── */
+.te-post {
+  font-family: Georgia, 'Times New Roman', serif !important;
+  font-size: 17px !important;
+  line-height: 1.8 !important;
+  color: #1a1a2e !important;
+  background-color: #ffffff !important;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ── Headings ── */
+.te-post h1 {
+  font-family: 'Segoe UI', Arial, sans-serif !important;
+  font-size: 2.1em !important;
+  font-weight: 700 !important;
+  color: #0d1117 !important;
+  background-color: transparent !important;
+  border-bottom: 3px solid #00BCD4 !important;
+  padding-bottom: 12px !important;
+  margin-top: 0 !important;
+  margin-bottom: 6px !important;
+}
+.te-post h1 + p em {
+  font-family: 'Segoe UI', Arial, sans-serif !important;
+  color: #555577 !important;
+  font-size: 0.9em !important;
+}
+.te-post h2 {
+  font-family: 'Segoe UI', Arial, sans-serif !important;
+  font-size: 1.45em !important;
+  font-weight: 700 !important;
+  color: #0d1117 !important;
+  background-color: transparent !important;
+  margin-top: 2.4em !important;
+  margin-bottom: 0.4em !important;
+  padding-left: 12px !important;
+  border-left: 4px solid #00BCD4 !important;
+}
+.te-post h3 {
+  font-family: 'Segoe UI', Arial, sans-serif !important;
+  font-size: 1.1em !important;
+  font-weight: 700 !important;
+  color: #1a1a2e !important;
+  background-color: transparent !important;
+  margin-top: 1.8em !important;
+  margin-bottom: 0.3em !important;
+}
+.te-post h4 {
+  font-family: 'Segoe UI', Arial, sans-serif !important;
+  color: #1a1a2e !important;
+  background-color: transparent !important;
+}
+
+/* ── Body text ── */
+.te-post p {
+  color: #1a1a2e !important;
+  background-color: transparent !important;
+  margin: 0.9em 0 !important;
+}
+.te-post li {
+  color: #1a1a2e !important;
+  background-color: transparent !important;
+  margin: 0.35em 0 !important;
+}
+.te-post strong {
+  color: #0d1117 !important;
+  background-color: transparent !important;
+}
+.te-post em {
+  color: inherit !important;
+}
+
+/* ── HR ── */
+.te-post hr {
+  border: none !important;
+  border-top: 1px solid #d0d7de !important;
+  margin: 2em 0 !important;
+  background: none !important;
+}
+
+/* ── Blockquote ── */
+.te-post blockquote {
+  background-color: #e8f8fa !important;
+  border-left: 4px solid #00BCD4 !important;
+  margin: 1.5em 0 !important;
+  padding: 14px 20px !important;
+  font-style: italic !important;
+  color: #003344 !important;
+  border-radius: 0 6px 6px 0 !important;
+}
+.te-post blockquote p {
+  margin: 0 !important;
+  color: #003344 !important;
+  background-color: transparent !important;
+}
+
+/* ── Inline code ── */
+.te-post p code,
+.te-post li code,
+.te-post td code,
+.te-post th code {
+  font-family: 'Consolas', 'Fira Code', 'Courier New', monospace !important;
+  font-size: 0.87em !important;
+  background-color: #ddeef2 !important;
+  color: #004455 !important;
+  padding: 2px 7px !important;
+  border-radius: 4px !important;
+  white-space: nowrap !important;
+}
+
+/* ── Code blocks — outer wrapper ── */
+.te-post .codehilite {
+  background-color: #1a1a2e !important;
+  border-radius: 8px !important;
+  margin: 1.4em 0 !important;
+  border: 1px solid #2d2d3f !important;
+  overflow-x: auto !important;
+}
+
+/* ── Code blocks — pre ── */
+.te-post .codehilite pre {
+  margin: 0 !important;
+  padding: 18px 22px !important;
+  background-color: transparent !important;
+  background: transparent !important;
+  font-family: 'Consolas', 'Fira Code', 'Courier New', monospace !important;
+  font-size: 0.84em !important;
+  line-height: 1.65 !important;
+  color: #e0e0f0 !important;
+  white-space: pre !important;
+  overflow-x: auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* ── Code blocks — code tag inside pre ── */
+.te-post .codehilite pre code {
+  background-color: transparent !important;
+  background: transparent !important;
+  color: #e0e0f0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-size: inherit !important;
+  white-space: pre !important;
+  border: none !important;
+}
+
+/* ── Lists ── */
+.te-post ul, .te-post ol {
+  padding-left: 1.6em !important;
+  margin: 0.8em 0 !important;
+  color: #1a1a2e !important;
+  background-color: transparent !important;
+}
+
+/* ── Tables ── */
+.te-post table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 1.5em 0 !important;
+  font-family: 'Segoe UI', Arial, sans-serif !important;
+  font-size: 0.9em !important;
+  background-color: #ffffff !important;
+}
+.te-post th {
+  background-color: #0d3040 !important;
+  color: #ffffff !important;
+  padding: 10px 16px !important;
+  text-align: left !important;
+  font-weight: 600 !important;
+}
+.te-post td {
+  padding: 9px 16px !important;
+  border-bottom: 1px solid #c8d0d8 !important;
+  vertical-align: top !important;
+  color: #1a1a2e !important;
+  background-color: #ffffff !important;
+}
+.te-post tr:nth-child(even) td {
+  background-color: #f0f4f6 !important;
+}
+
+/* ── Pygments monokai — all colors forced ── */
+pre { line-height: 125%; }
+td.linenos .normal { color: inherit !important; background-color: transparent !important; padding-left: 5px; padding-right: 5px; }
+span.linenos { color: inherit !important; background-color: transparent !important; padding-left: 5px; padding-right: 5px; }
+td.linenos .special { color: #000000 !important; background-color: #ffffc0 !important; padding-left: 5px; padding-right: 5px; }
+span.linenos.special { color: #000000 !important; background-color: #ffffc0 !important; padding-left: 5px; padding-right: 5px; }
+.te-post .codehilite .hll { background-color: #49483e }
+.te-post .codehilite { background: #272822 !important; color: #F8F8F2 }
+.te-post .codehilite .c { color: #959077 } /* Comment */
+.te-post .codehilite .err { color: #ED007E !important; background-color: #1E0010 } /* Error */
+.te-post .codehilite .esc { color: #F8F8F2 } /* Escape */
+.te-post .codehilite .g { color: #F8F8F2 } /* Generic */
+.te-post .codehilite .k { color: #66D9EF } /* Keyword */
+.te-post .codehilite .l { color: #AE81FF } /* Literal */
+.te-post .codehilite .n { color: #F8F8F2 } /* Name */
+.te-post .codehilite .o { color: #FF4689 } /* Operator */
+.te-post .codehilite .x { color: #F8F8F2 } /* Other */
+.te-post .codehilite .p { color: #F8F8F2 } /* Punctuation */
+.te-post .codehilite .ch { color: #959077 } /* Comment.Hashbang */
+.te-post .codehilite .cm { color: #959077 } /* Comment.Multiline */
+.te-post .codehilite .cp { color: #959077 } /* Comment.Preproc */
+.te-post .codehilite .cpf { color: #959077 } /* Comment.PreprocFile */
+.te-post .codehilite .c1 { color: #959077 } /* Comment.Single */
+.te-post .codehilite .cs { color: #959077 } /* Comment.Special */
+.te-post .codehilite .gd { color: #FF4689 } /* Generic.Deleted */
+.te-post .codehilite .ge { color: #F8F8F2 !important; font-style: italic } /* Generic.Emph */
+.te-post .codehilite .ges { color: #F8F8F2 !important; font-weight: bold; font-style: italic } /* Generic.EmphStrong */
+.te-post .codehilite .gr { color: #F8F8F2 } /* Generic.Error */
+.te-post .codehilite .gh { color: #F8F8F2 } /* Generic.Heading */
+.te-post .codehilite .gi { color: #A6E22E } /* Generic.Inserted */
+.te-post .codehilite .go { color: #66D9EF } /* Generic.Output */
+.te-post .codehilite .gp { color: #FF4689 !important; font-weight: bold } /* Generic.Prompt */
+.te-post .codehilite .gs { color: #F8F8F2 !important; font-weight: bold } /* Generic.Strong */
+.te-post .codehilite .gu { color: #959077 } /* Generic.Subheading */
+.te-post .codehilite .gt { color: #F8F8F2 } /* Generic.Traceback */
+.te-post .codehilite .kc { color: #66D9EF } /* Keyword.Constant */
+.te-post .codehilite .kd { color: #66D9EF } /* Keyword.Declaration */
+.te-post .codehilite .kn { color: #FF4689 } /* Keyword.Namespace */
+.te-post .codehilite .kp { color: #66D9EF } /* Keyword.Pseudo */
+.te-post .codehilite .kr { color: #66D9EF } /* Keyword.Reserved */
+.te-post .codehilite .kt { color: #66D9EF } /* Keyword.Type */
+.te-post .codehilite .ld { color: #E6DB74 } /* Literal.Date */
+.te-post .codehilite .m { color: #AE81FF } /* Literal.Number */
+.te-post .codehilite .s { color: #E6DB74 } /* Literal.String */
+.te-post .codehilite .na { color: #A6E22E } /* Name.Attribute */
+.te-post .codehilite .nb { color: #F8F8F2 } /* Name.Builtin */
+.te-post .codehilite .nc { color: #A6E22E } /* Name.Class */
+.te-post .codehilite .no { color: #66D9EF } /* Name.Constant */
+.te-post .codehilite .nd { color: #A6E22E } /* Name.Decorator */
+.te-post .codehilite .ni { color: #F8F8F2 } /* Name.Entity */
+.te-post .codehilite .ne { color: #A6E22E } /* Name.Exception */
+.te-post .codehilite .nf { color: #A6E22E } /* Name.Function */
+.te-post .codehilite .nl { color: #F8F8F2 } /* Name.Label */
+.te-post .codehilite .nn { color: #F8F8F2 } /* Name.Namespace */
+.te-post .codehilite .nx { color: #A6E22E } /* Name.Other */
+.te-post .codehilite .py { color: #F8F8F2 } /* Name.Property */
+.te-post .codehilite .nt { color: #FF4689 } /* Name.Tag */
+.te-post .codehilite .nv { color: #F8F8F2 } /* Name.Variable */
+.te-post .codehilite .ow { color: #FF4689 } /* Operator.Word */
+.te-post .codehilite .pm { color: #F8F8F2 } /* Punctuation.Marker */
+.te-post .codehilite .w { color: #F8F8F2 } /* Text.Whitespace */
+.te-post .codehilite .mb { color: #AE81FF } /* Literal.Number.Bin */
+.te-post .codehilite .mf { color: #AE81FF } /* Literal.Number.Float */
+.te-post .codehilite .mh { color: #AE81FF } /* Literal.Number.Hex */
+.te-post .codehilite .mi { color: #AE81FF } /* Literal.Number.Integer */
+.te-post .codehilite .mo { color: #AE81FF } /* Literal.Number.Oct */
+.te-post .codehilite .sa { color: #E6DB74 } /* Literal.String.Affix */
+.te-post .codehilite .sb { color: #E6DB74 } /* Literal.String.Backtick */
+.te-post .codehilite .sc { color: #E6DB74 } /* Literal.String.Char */
+.te-post .codehilite .dl { color: #E6DB74 } /* Literal.String.Delimiter */
+.te-post .codehilite .sd { color: #E6DB74 } /* Literal.String.Doc */
+.te-post .codehilite .s2 { color: #E6DB74 } /* Literal.String.Double */
+.te-post .codehilite .se { color: #AE81FF } /* Literal.String.Escape */
+.te-post .codehilite .sh { color: #E6DB74 } /* Literal.String.Heredoc */
+.te-post .codehilite .si { color: #E6DB74 } /* Literal.String.Interpol */
+.te-post .codehilite .sx { color: #E6DB74 } /* Literal.String.Other */
+.te-post .codehilite .sr { color: #E6DB74 } /* Literal.String.Regex */
+.te-post .codehilite .s1 { color: #E6DB74 } /* Literal.String.Single */
+.te-post .codehilite .ss { color: #E6DB74 } /* Literal.String.Symbol */
+.te-post .codehilite .bp { color: #F8F8F2 } /* Name.Builtin.Pseudo */
+.te-post .codehilite .fm { color: #A6E22E } /* Name.Function.Magic */
+.te-post .codehilite .vc { color: #F8F8F2 } /* Name.Variable.Class */
+.te-post .codehilite .vg { color: #F8F8F2 } /* Name.Variable.Global */
+.te-post .codehilite .vi { color: #F8F8F2 } /* Name.Variable.Instance */
+.te-post .codehilite .vm { color: #F8F8F2 } /* Name.Variable.Magic */
+.te-post .codehilite .il { color: #AE81FF } /* Literal.Number.Integer.Long */
+</style>
+
+<div class="te-post">
+<h1 id="type-erasure-in-c-teaching-the-compiler-to-forget-on-purpose">Type Erasure in C++: Teaching the Compiler to Forget — on Purpose</h1>
+
+<p><em>Or: How <code>std::function</code> stores a lambda, a function pointer, and a functor in the same box</em></p>
+
+<hr />
+
+<p>You're building a transaction monitor for a SystemC simulation. The monitor needs to do several things every time a TLM transaction arrives: log it, measure its latency, run a protocol checker, collect coverage. Each of these is a separate object — a <code>Logger</code>, a <code>LatencyTracker</code>, a <code>ProtocolChecker</code>, a <code>CoverageCollector</code>. They have nothing in common except one thing: they all respond to a transaction.</p>
+
+<p>You want to write this:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">TransactionHandler</span><span class="o">&gt;</span><span class="w"> </span><span class="n">handlers</span><span class="p">;</span>
+<span class="n">handlers</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">Logger</span><span class="p">{});</span>
+<span class="n">handlers</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">LatencyTracker</span><span class="p">{});</span>
+<span class="n">handlers</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">ProtocolChecker</span><span class="p">{});</span>
+
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&</span><span class="w"> </span><span class="n">h</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">handlers</span><span class="p">)</span>
+<span class="w">    </span><span class="n">h</span><span class="p">.</span><span class="n">on_transaction</span><span class="p">(</span><span class="n">txn</span><span class="p">);</span>
+</code></pre>
+
+</div>
+
+<p>But the compiler won't let you. <code>Logger</code>, <code>LatencyTracker</code>, and <code>ProtocolChecker</code> are different types. A <code>std::vector</code> holds one type. You can't mix them.</p>
+
+<p>This is the moment you need <strong>type erasure</strong>.</p>
+
+<hr />
+
+<h2 id="what-is-type-erasure">What Is Type Erasure?</h2>
+
+<p>Type erasure is a technique that lets you <strong>store objects of different concrete types behind a single uniform interface</strong>, without those types sharing a common base class, and without the caller knowing — or caring — what the real type is.</p>
+
+<p>The "erasure" isn't deletion. It's concealment. The concrete type still exists, fully formed, somewhere in memory. But to the outside world, it has been replaced by a uniform wrapper that only exposes the behaviors you care about.</p>
+
+<p>In one sentence: <strong>type erasure trades compile-time type knowledge for runtime flexibility, without exposing the mechanism to the caller.</strong></p>
+
+<hr />
+
+<h2 id="the-root-problem-why-templates-alone-arent-enough">The Root Problem: Why Templates Alone Aren't Enough</h2>
+
+<p>Templates are C++'s primary tool for abstraction without overhead. But they have a fundamental constraint: every template instantiation produces a <em>different</em> type.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">call</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;</span><span class="w"> </span><span class="n">handler</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Transaction</span><span class="o">&amp;</span><span class="w"> </span><span class="n">txn</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">handler</span><span class="p">.</span><span class="n">on_transaction</span><span class="p">(</span><span class="n">txn</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="c1">// These are fine individually:</span>
+<span class="n">call</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span><span class="w"> </span><span class="n">txn</span><span class="p">);</span>
+<span class="n">call</span><span class="p">(</span><span class="n">tracker</span><span class="p">,</span><span class="w"> </span><span class="n">txn</span><span class="p">);</span>
+
+<span class="c1">// But this is impossible:</span>
+<span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o"><???></span><span class="w"> </span><span class="n">handlers</span><span class="p">;</span><span class="w">   </span><span class="c1">// what type goes here?</span>
+</code></pre>
+
+</div>
+
+<p>A <code>std::vector&lt;Logger&gt;</code> holds only <code>Logger</code> objects. A <code>std::vector&lt;LatencyTracker&gt;</code> holds only <code>LatencyTracker</code> objects. There is no <code>std::vector&lt;AnyHandlerThatHasOnTransaction&gt;</code> — unless you build it.</p>
+
+<p>Templates solve the <em>single-call</em> problem. Type erasure solves the <em>heterogeneous-container</em> problem.</p>
+
+<p>The naive fix is inheritance:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">struct</span><span class="w"> </span><span class="nc">HandlerBase</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">on_transaction</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Transaction</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="o">~</span><span class="n">HandlerBase</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o"><</span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o"><</span><span class="n">HandlerBase</span><span class="o">>></span><span class="w"> </span><span class="n">handlers</span><span class="p">;</span>
+</code></pre>
+
+</div>
+
+<p>This works, but it forces every handler to inherit from <code>HandlerBase</code>. Your <code>Logger</code> from a third-party library? Doesn't inherit from <code>HandlerBase</code>. Your lambda? Can't inherit from anything. Type erasure solves this without requiring any change to the types being stored.</p>
+
+<hr />
+
+<h2 id="three-mechanisms-one-idea">Three Mechanisms, One Idea</h2>
+
+<p>Before building something, it helps to see that type erasure already exists all around you in C++, in three flavors:</p>
+
+<p><strong>1. The C way — void pointers</strong></p>
+
+<p>The oldest form. <code>qsort</code> is the canonical example:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="kt">void</span><span class="w"> </span><span class="nf">qsort</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">base</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">count</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="p">,</span>
+<span class="w">           </span><span class="kt">int</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">compare</span><span class="p">)(</span><span class="k">const</span><span class="w"> </span><span class="kt">void</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">void</span><span class="o">*</span><span class="p">));</span>
+</code></pre>
+</div>
+
+<p>The array's element type is erased into <code>void*</code>. The caller passes a comparator that knows the real type. The information is there — just split between the pointer and the function. Dangerous, but it works.</p>
+
+<p><strong>2. The OOP way — virtual dispatch</strong></p>
+
+<p>The classic approach: define an abstract interface, store pointers to the base. The vtable dispatches to the right implementation at runtime. Safe and clear, but requires inheritance.</p>
+
+<p><strong>3. The C++ way — template wrappers with virtual internals</strong></p>
+
+<p>This is the good stuff. You wrap any type T in a template-generated class that implements a virtual interface. The caller sees only the wrapper; the concrete type is hidden inside. This is how <code>std::function</code>, <code>std::any</code>, and most modern type-erasure patterns work.</p>
+
+<hr />
+
+<h2 id="building-it-yourself-a-step-by-step-walkthrough">Building It Yourself: A Step-by-Step Walkthrough</h2>
+
+<p>Understanding type erasure deeply means building a simplified <code>std::function</code>. Let's do exactly that: a <code>MyFunction&lt;void()&gt;</code> that can hold any callable with no arguments.</p>
+
+<h3 id="step-1-define-the-concept">Step 1: Define the Concept</h3>
+
+<p>A <strong>concept</strong> (in the broad sense — what the wrapped type must support) is just the answer to: <em>"what operations do I need from T?"</em></p>
+
+<p>For a callable with no args, the concept is simple:
+- Must be callable as <code>t()</code> with no arguments
+- Must be copy-constructible (so we can copy our wrapper)
+- Must be destructible</p>
+
+<p>That's it. No base class. No interface. Just a behavioral contract.</p>
+
+<p>In C++20 you can make this explicit:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<span class="k">concept</span><span class="w"> </span><span class="nc">Callable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">requires</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">t</span><span class="p">()</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">same_as</span><span class="o">&lt;</span><span class="kt">void</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre>
+</div>
+
+<p>In C++17 and earlier, this contract lives in your head and in SFINAE or <code>if constexpr</code>. The concept is implicit but just as real.</p>
+
+<h3 id="step-2-the-abstract-interface-base">Step 2: The Abstract Interface (Base)</h3>
+
+<p>The type-erased interface is a pure virtual base class. This is the shape that the outside world sees:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">struct</span><span class="w"> </span><span class="nc">CallableBase</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">call</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="n">CallableBase</span><span class="o">*</span><span class="w"> </span><span class="nf">clone</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="o">~</span><span class="n">CallableBase</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre>
+</div>
+
+<p>This is the "erased" view. It knows nothing about the concrete type. It only knows: <em>you can call this, and you can copy it.</em></p>
+
+<h3 id="step-3-the-template-wrapper-where-concrete-types-are-born">Step 3: The Template Wrapper — Where Concrete Types Are Born</h3>
+
+<p>This is the crucial piece. <code>CallableModel&lt;T&gt;</code> is a template that:
+- Stores a specific concrete type <code>T</code>
+- Implements the virtual interface by delegating to <code>T</code></p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">CallableModel</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">CallableBase</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">T</span><span class="w"> </span><span class="n">callable_</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">explicit</span><span class="w"> </span><span class="n">CallableModel</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">callable_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">t</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">call</span><span class="p">()</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">callable_</span><span class="p">();</span><span class="w">   </span><span class="c1">// delegate to the real type</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">CallableBase</span><span class="o">*</span><span class="w"> </span><span class="n">clone</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">CallableModel</span><span class="o"><</span><span class="n">T</span><span class="o">></span><span class="p">(</span><span class="n">callable_</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre>
+
+</div>
+
+<p><strong>This is where the compiler instantiates a concrete type.</strong> When you write:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="n">MyFunction</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](){</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;hello</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span><span class="w"> </span><span class="p">};</span>
+</code></pre>
+</div>
+
+<p>The compiler sees <code>T = lambda_type_XYZ</code>. It stamps out a new class <code>CallableModel&lt;lambda_type_XYZ&gt;</code>, complete with:
+- A member of type <code>lambda_type_XYZ</code>
+- An overridden <code>call()</code> that invokes <code>lambda_type_XYZ::operator()()</code>
+- An overridden <code>clone()</code> that copies the lambda</p>
+
+<p>This stamping-out happens at the point of assignment or construction — in the template that creates the <code>CallableModel</code>. The key insight: <strong>the concrete type is captured forever inside <code>CallableModel&lt;T&gt;</code>, and nothing outside ever needs to know <code>T</code> again.</strong></p>
+
+<h3 id="step-4-the-owning-class-the-public-api">Step 4: The Owning Class — The Public API</h3>
+
+<p>The owning class is what users actually hold. It manages the <code>CallableBase*</code> and provides the clean interface:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyFunction</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">CallableBase</span><span class="o">*</span><span class="w"> </span><span class="n">ptr_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="n">MyFunction</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// This template constructor is the "type erasure point"</span>
+<span class="w">    </span><span class="k">template</span><span class="o"><</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">></span>
+<span class="w">    </span><span class="n">MyFunction</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">callable</span><span class="p">)</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">ptr_</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">CallableModel</span><span class="o"><</span><span class="n">T</span><span class="o">></span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">callable</span><span class="p">)))</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="w">    </span><span class="c1">// Copy: use clone() — works without knowing T</span>
+<span class="w">    </span><span class="n">MyFunction</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">MyFunction</span><span class="o">&</span><span class="w"> </span><span class="n">other</span><span class="p">)</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">ptr_</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">ptr_</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">ptr_</span><span class="o">-></span><span class="n">clone</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="w">    </span><span class="c1">// Move</span>
+<span class="w">    </span><span class="n">MyFunction</span><span class="p">(</span><span class="n">MyFunction</span><span class="o">&&</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span>
+<span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">ptr_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">exchange</span><span class="p">(</span><span class="n">other</span><span class="p">.</span><span class="n">ptr_</span><span class="p">,</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="w">    </span><span class="n">MyFunction</span><span class="o">&</span><span class="w"> </span><span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">MyFunction</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">swap</span><span class="p">(</span><span class="n">ptr_</span><span class="p">,</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">ptr_</span><span class="p">);</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// The erased call — no template, no T, just behavior</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="k">operator</span><span class="p">()()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ptr_</span><span class="p">)</span><span class="w"> </span><span class="n">ptr_</span><span class="o">-></span><span class="n">call</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="o">~</span><span class="n">MyFunction</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">delete</span><span class="w"> </span><span class="n">ptr_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre>
+
+</div>
+
+<p>Now you can write:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="n">MyFunction</span><span class="w"> </span><span class="n">f1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;lambda</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span><span class="w"> </span><span class="p">};</span>
+<span class="n">MyFunction</span><span class="w"> </span><span class="n">f2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">some_free_function</span><span class="p">;</span>
+
+<span class="k">struct</span><span class="w"> </span><span class="nc">Functor</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">operator</span><span class="p">()()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o"><<</span><span class="w"> </span><span class="s">"functor</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">};</span>
+<span class="n">MyFunction</span><span class="w"> </span><span class="n">f3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Functor</span><span class="p">{};</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o"><</span><span class="n">MyFunction</span><span class="o">></span><span class="w"> </span><span class="n">tasks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">f1</span><span class="p">,</span><span class="w"> </span><span class="n">f2</span><span class="p">,</span><span class="w"> </span><span class="n">f3</span><span class="p">};</span>
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">tasks</span><span class="p">)</span><span class="w"> </span><span class="n">t</span><span class="p">();</span><span class="w">  </span><span class="c1">// works. all different types. one interface.</span>
+</code></pre>
+
+</div>
+
+<p>The vector holds <code>MyFunction</code> objects. Each <code>MyFunction</code> holds a <code>CallableBase*</code>. Each <code>CallableBase*</code> points to a different <code>CallableModel&lt;T&gt;</code>. The concrete types — lambda, function pointer, functor — are hidden inside. <strong>Erased.</strong></p>
+
+<h3 id="step-5-small-buffer-optimization-sbo">Step 5: Small Buffer Optimization (SBO)</h3>
+
+<p>The implementation above heap-allocates every callable. For small callables (like a lambda capturing nothing, or a function pointer), this is wasteful. Real implementations of <code>std::function</code> use a <strong>Small Buffer Optimization</strong>: a small stack-allocated buffer inside the owning class. If the callable fits, no heap allocation happens.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyFunction</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">SBO_SIZE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span>
+<span class="w">    </span><span class="k">alignas</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">max_align_t</span><span class="p">)</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="n">buf_</span><span class="p">[</span><span class="n">SBO_SIZE</span><span class="p">];</span>
+<span class="w">    </span><span class="n">CallableBase</span><span class="o">*</span><span class="w"> </span><span class="n">ptr_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">heap_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">template</span><span class="o"><</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">></span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">store</span><span class="p">(</span><span class="n">T</span><span class="w"> </span><span class="n">callable</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">CallableModel</span><span class="o"><</span><span class="n">T</span><span class="o">></span><span class="p">)</span><span class="w"> </span><span class="o"><=</span><span class="w"> </span><span class="n">SBO_SIZE</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">ptr_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="p">(</span><span class="n">buf_</span><span class="p">)</span><span class="w"> </span><span class="n">CallableModel</span><span class="o"><</span><span class="n">T</span><span class="o">></span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">callable</span><span class="p">));</span>
+<span class="w">            </span><span class="n">heap_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">ptr_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">CallableModel</span><span class="o"><</span><span class="n">T</span><span class="o">></span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">callable</span><span class="p">));</span>
+<span class="w">            </span><span class="n">heap_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="c1">// … rest of interface</span>
+<span class="w">    </span><span class="o">~</span><span class="n">MyFunction</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ptr_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">ptr_</span><span class="o">->~</span><span class="n">CallableBase</span><span class="p">();</span><span class="w">          </span><span class="c1">// always call destructor</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">heap_</span><span class="p">)</span><span class="w"> </span><span class="o">::</span><span class="k">operator</span><span class="w"> </span><span class="k">delete</span><span class="p">(</span><span class="n">ptr_</span><span class="p">);</span><span class="w">  </span><span class="c1">// only free if heap</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre>
+
+</div>
+
+<p>This is why small lambdas through <code>std::function</code> are nearly free, while lambdas capturing large state trigger a heap allocation.</p>
+
+<hr />
+
+<h2 id="how-the-compiler-handles-it-the-concrete-type-timeline">How the Compiler Handles It: The Concrete Type Timeline</h2>
+
+<p>This is the mental model that makes type erasure click:</p>
+
+<pre><code>User code:
+    MyFunction f = some_lambda;  // ← compiler sees T = lambda_type
+
+Compiler action at this line:
+    1. Deduces T = lambda_type from the constructor argument
+    2. Instantiates CallableModel&lt;lambda_type&gt; — generates a brand new class
+    3. Constructs a CallableModel&lt;lambda_type&gt; in memory (stack or heap)
+    4. Stores a CallableBase* pointing to it inside MyFunction
+
+After this line:
+    - Nobody outside MyFunction knows T anymore
+    - The concrete type is "forgotten" by the type system
+    - Only the vtable pointer inside the CallableBase knows how to call it
+    - You can pass MyFunction anywhere — copy it, move it, put it in a vector — T is irrelevant
+
+When f() is called:
+    - ptr_-&gt;call() → vtable lookup → CallableModel&lt;lambda_type&gt;::call()
+    - → lambda_type::operator()()
+    - The compiler generated this dispatch path at template instantiation time
+</code></pre>
+
+<p>The concrete type lives on as a fully real, fully typed object in memory. The type erasure only happens at the <em>interface boundary</em> — the <code>CallableBase*</code> level. Below that, everything is fully typed and can be inlined by the compiler within <code>CallableModel&lt;T&gt;::call()</code>.</p>
+
+<hr />
+
+<h2 id="the-c-standard-library-type-erasure-everywhere">The C++ Standard Library: Type Erasure Everywhere</h2>
+
+<p>Once you know what to look for, you see it everywhere in <code>&lt;functional&gt;</code>, <code>&lt;memory&gt;</code>, and <code>&lt;any&gt;</code>.</p>
+
+<h3 id="stdfunctionrargs"><code>std::function&lt;R(Args...)&gt;</code></h3>
+
+<p>The most famous example. Stores any callable matching a signature. Uses SBO internally (typically 16–32 bytes). The template parameter <code>R(Args...)</code> is the <em>concept</em> — the only thing you need to know about T.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="n">f</span><span class="p">;</span>
+<span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="kt">int</span><span class="w"> </span><span class="n">x</span><span class="p">){</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">x</span><span class="p">;</span><span class="w"> </span><span class="p">};</span><span class="w">    </span><span class="c1">// lambda — type erased</span>
+<span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">printf_style_fn</span><span class="p">;</span><span class="w">                  </span><span class="c1">// function pointer — type erased</span>
+<span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">bind</span><span class="p">(</span><span class="o">&amp;</span><span class="n">Obj</span><span class="o">::</span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">obj</span><span class="p">,</span><span class="w"> </span><span class="n">_1</span><span class="p">);</span><span class="w"> </span><span class="c1">// bound member — type erased</span>
+</code></pre>
+</div>
+
+<h3 id="stdany"><code>std::any</code></h3>
+
+<p>Type erasure without any behavioral concept. Stores <em>any</em> copy-constructible type:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="n">std</span><span class="o">::</span><span class="n">any</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">42</span><span class="p">;</span>
+<span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">(</span><span class="s">&quot;hello&quot;</span><span class="p">);</span>
+<span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SomeComplexStruct</span><span class="p">{};</span>
+
+<span class="c1">// Type is recoverable via std::any_cast, but the container is typeless</span>
+<span class="kt">int</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">any_cast</span><span class="o"><</span><span class="kt">int</span><span class="o">></span><span class="p">(</span><span class="n">a</span><span class="p">);</span><span class="w">  </span><span class="c1">// throws if wrong type</span>
+</code></pre>
+
+</div>
+
+<p>Internally: same pattern — virtual base, template model, SBO. The "concept" is just "copy-constructible and destructible."</p>
+
+<h3 id="stdvariantt1-t2-t3"><code>std::variant&lt;T1, T2, T3&gt;</code></h3>
+
+<p>A <em>closed</em> form of type erasure — the set of possible types is fixed at compile time. <code>std::variant&lt;int, float, std::string&gt;</code> can hold exactly those three types, uses a discriminant tag instead of vtable, and enables <code>std::visit</code> dispatch:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="n">std</span><span class="o">::</span><span class="n">variant</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">42</span><span class="p">;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">visit</span><span class="p">([](</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">val</span><span class="p">){</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">val</span><span class="p">;</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="n">v</span><span class="p">);</span>
+</code></pre>
+</div>
+
+<p>Prefer <code>variant</code> when the set of types is known at compile time — it's typically faster (no heap, no vtable, potentially constexpr) and more explicit about what types are allowed.</p>
+
+<h3 id="stdshared_ptrt-the-deleter"><code>std::shared_ptr&lt;T&gt;</code> — The Deleter</h3>
+
+<p>This is a subtle one. <code>std::shared_ptr&lt;T&gt;</code> can be constructed with a custom deleter of any type:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">auto</span><span class="w"> </span><span class="n">p1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="kt">FILE</span><span class="o">&gt;</span><span class="p">(</span><span class="n">fopen</span><span class="p">(</span><span class="s">&quot;x&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;r&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">fclose</span><span class="p">);</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">p2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="kt">void</span><span class="o">&gt;</span><span class="p">(</span><span class="n">malloc</span><span class="p">(</span><span class="mi">64</span><span class="p">),</span><span class="w"> </span><span class="n">free</span><span class="p">);</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">p3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">Widget</span><span class="o">&gt;</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Widget</span><span class="p">,</span><span class="w"> </span><span class="p">[](</span><span class="n">Widget</span><span class="o">*</span><span class="w"> </span><span class="n">w</span><span class="p">){</span><span class="w"> </span><span class="n">w</span><span class="o">-&gt;</span><span class="n">cleanup</span><span class="p">();</span><span class="w"> </span><span class="k">delete</span><span class="w"> </span><span class="n">w</span><span class="p">;</span><span class="w"> </span><span class="p">});</span>
+</code></pre>
+</div>
+
+<p>All three are <code>std::shared_ptr&lt;FILE&gt;</code>, <code>std::shared_ptr&lt;void&gt;</code>, <code>std::shared_ptr&lt;Widget&gt;</code> — the deleter type is erased from the <code>shared_ptr</code> type. It lives in the control block as a type-erased callable. This is why <code>shared_ptr</code> copying works without knowing the deleter type.</p>
+
+<h3 id="stdpackaged_taskrargs"><code>std::packaged_task&lt;R(Args...)&gt;</code></h3>
+
+<p>Like <code>std::function</code>, but the callable is movable-only and the result is stored in a <code>std::future</code>. Type-erases the callable for use with thread pools.</p>
+
+<h3 id="stdtype_index"><code>std::type_index</code></h3>
+
+<p>A lightweight, copyable wrapper over <code>std::type_info</code>. Type-erases the type itself into a hashable, comparable value. Used to build type-keyed maps at runtime:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="n">std</span><span class="o">::</span><span class="n">unordered_map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">type_index</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">any</span><span class="o">&gt;</span><span class="w"> </span><span class="n">registry</span><span class="p">;</span>
+<span class="n">registry</span><span class="p">[</span><span class="k">typeid</span><span class="p">(</span><span class="n">Widget</span><span class="p">)]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WidgetFactory</span><span class="p">{};</span>
+</code></pre>
+</div>
+
+<h3 id="c20-stdstop_token-stdstop_callback">C++20 <code>std::stop_token</code> / <code>std::stop_callback</code></h3>
+
+<p><code>std::stop_callback</code> type-erases the callback registered for cooperative cancellation, so the <code>std::stop_token</code> doesn't need to know the callback's type.</p>
+
+<h3 id="ranges-and-stdfunction_ref-c26-preview">Ranges and <code>std::function_ref</code> (C++26 preview)</h3>
+
+<p><code>std::ranges::views</code> use type-erased adaptors under the hood in some contexts. <code>std::function_ref</code> (proposed for C++26) is a non-owning, zero-overhead type-erased callable reference — no heap allocation, no SBO needed.</p>
+
+<hr />
+
+<h2 id="use-cases-in-depth">Use Cases in Depth</h2>
+
+<h3 id="1-task-queues-and-thread-pools">1. Task Queues and Thread Pools</h3>
+
+<p>The canonical production use case. A thread pool needs a queue of work items with different types:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ThreadPool</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">queue</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">tasks_</span><span class="p">;</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">mutex</span><span class="w"> </span><span class="n">mtx_</span><span class="p">;</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">F</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">enqueue</span><span class="p">(</span><span class="n">F</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">task</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="nf">lock</span><span class="p">(</span><span class="n">mtx_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">tasks_</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="p">(</span><span class="n">task</span><span class="p">)));</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">run_next</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o"><</span><span class="kt">void</span><span class="p">()</span><span class="o">></span><span class="w"> </span><span class="n">task</span><span class="p">;</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">lock_guard</span><span class="w"> </span><span class="nf">lock</span><span class="p">(</span><span class="n">mtx_</span><span class="p">);</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">tasks_</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span><span class="w"> </span><span class="k">return</span><span class="p">;</span>
+<span class="w">            </span><span class="n">task</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">tasks_</span><span class="p">.</span><span class="n">front</span><span class="p">());</span>
+<span class="w">            </span><span class="n">tasks_</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="n">task</span><span class="p">();</span><span class="w">  </span><span class="c1">// concrete type was erased; we just call it</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="c1">// Usage</span>
+<span class="n">pool</span><span class="p">.</span><span class="n">enqueue</span><span class="p">([</span><span class="o">&</span><span class="p">]{</span><span class="w"> </span><span class="n">process_packet</span><span class="p">(</span><span class="n">pkt</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
+<span class="n">pool</span><span class="p">.</span><span class="n">enqueue</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">bind</span><span class="p">(</span><span class="o">&</span><span class="n">Sim</span><span class="o">::</span><span class="n">run_step</span><span class="p">,</span><span class="w"> </span><span class="o">&</span><span class="n">sim</span><span class="p">,</span><span class="w"> </span><span class="n">clock</span><span class="p">));</span>
+<span class="n">pool</span><span class="p">.</span><span class="n">enqueue</span><span class="p">(</span><span class="o">&</span><span class="n">flush_log</span><span class="p">);</span>
+</code></pre>
+
+</div>
+
+<p>The thread pool doesn't know — and shouldn't care — what the tasks are. <code>std::function&lt;void()&gt;</code> is the type erasure layer.</p>
+
+<p><strong>Insight for the seasoned programmer:</strong> For high-throughput thread pools, <code>std::function</code> overhead (potential heap alloc per enqueue) matters. Consider a custom type-erased callable with a larger SBO, or the <code>move_only_function</code> from C++23, which avoids the requirement to be copy-constructible and thus enables more aggressive move semantics.</p>
+
+<h3 id="2-event-systems-and-signalslot">2. Event Systems and Signal/Slot</h3>
+
+<p>A type-erased event system:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="p">...</span><span class="w"> </span><span class="n">Args</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Signal</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">(</span><span class="n">Args</span><span class="p">...)</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">slots_</span><span class="p">;</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">F</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">connect</span><span class="p">(</span><span class="n">F</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">f</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">slots_</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">F</span><span class="o">&gt;</span><span class="p">(</span><span class="n">f</span><span class="p">));</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">emit</span><span class="p">(</span><span class="n">Args</span><span class="p">…</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&</span><span class="w"> </span><span class="n">slot</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">slots_</span><span class="p">)</span>
+<span class="w">            </span><span class="n">slot</span><span class="p">(</span><span class="n">args</span><span class="p">…);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="c1">// Usage</span>
+<span class="n">Signal</span><span class="o"><</span><span class="k">const</span><span class="w"> </span><span class="n">Transaction</span><span class="o">&></span><span class="w"> </span><span class="n">on_txn</span><span class="p">;</span>
+
+<span class="n">on_txn</span><span class="p">.</span><span class="n">connect</span><span class="p">([</span><span class="o">&</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="n">Transaction</span><span class="o">&</span><span class="w"> </span><span class="n">t</span><span class="p">){</span><span class="w"> </span><span class="n">logger</span><span class="p">.</span><span class="n">log</span><span class="p">(</span><span class="n">t</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
+<span class="n">on_txn</span><span class="p">.</span><span class="n">connect</span><span class="p">([</span><span class="o">&</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="n">Transaction</span><span class="o">&</span><span class="w"> </span><span class="n">t</span><span class="p">){</span><span class="w"> </span><span class="n">tracker</span><span class="p">.</span><span class="n">record</span><span class="p">(</span><span class="n">t</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
+<span class="n">on_txn</span><span class="p">.</span><span class="n">connect</span><span class="p">(</span><span class="o">&</span><span class="n">protocol_check</span><span class="p">);</span>
+
+<span class="n">on_txn</span><span class="p">.</span><span class="n">emit</span><span class="p">(</span><span class="n">txn</span><span class="p">);</span><span class="w">  </span><span class="c1">// all three fire</span>
+</code></pre>
+
+</div>
+
+<p>This solves exactly the SystemC monitor problem from the opening story. Different handler types, one signal, zero coupling.</p>
+
+<h3 id="3-systemc-tlm-extension-mechanism">3. SystemC TLM Extension Mechanism</h3>
+
+<p>The TLM 2.0 standard uses type erasure directly. <code>tlm_generic_payload</code> supports user-defined extensions via <code>tlm_extension&lt;T&gt;</code>:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// The type-erased base</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">tlm_extension_base</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="n">tlm_extension_base</span><span class="o">*</span><span class="w"> </span><span class="n">clone</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">free</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">delete</span><span class="w"> </span><span class="k">this</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="o">~</span><span class="n">tlm_extension_base</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="c1">// The template wrapper — this IS the type erasure model</span>
+<span class="k">template</span><span class="o"><</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">></span>
+<span class="k">class</span><span class="w"> </span><span class="nc">tlm_extension</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">tlm_extension_base</span><span class="w"> </span><span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">ID</span><span class="p">;</span><span class="w">  </span><span class="c1">// unique ID per concrete T</span>
+<span class="w">    </span><span class="c1">// …</span>
+<span class="p">};</span>
+
+<span class="c1">// User-defined extension</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">LatencyExtension</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">tlm</span><span class="o">::</span><span class="n">tlm_extension</span><span class="o"><</span><span class="n">LatencyExtension</span><span class="o">></span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">sc_core</span><span class="o">::</span><span class="n">sc_time</span><span class="w"> </span><span class="n">start_time</span><span class="p">;</span>
+<span class="w">    </span><span class="n">tlm_extension_base</span><span class="o">*</span><span class="w"> </span><span class="nf">clone</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">LatencyExtension</span><span class="p">(</span><span class="o">*</span><span class="k">this</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// …</span>
+<span class="p">};</span>
+
+<span class="c1">// Payload stores extension via type-erased pointer</span>
+<span class="n">tlm</span><span class="o">::</span><span class="n">tlm_generic_payload</span><span class="w"> </span><span class="n">txn</span><span class="p">;</span>
+<span class="n">txn</span><span class="p">.</span><span class="n">set_extension</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">LatencyExtension</span><span class="p">{</span><span class="n">sc_time_stamp</span><span class="p">()});</span>
+
+<span class="c1">// Later, anywhere in the model:</span>
+<span class="n">LatencyExtension</span><span class="o">*</span><span class="w"> </span><span class="n">ext</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">nullptr</span><span class="p">;</span>
+<span class="n">txn</span><span class="p">.</span><span class="n">get_extension</span><span class="p">(</span><span class="n">ext</span><span class="p">);</span><span class="w">  </span><span class="c1">// type-safe retrieval</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ext</span><span class="p">)</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="w"> </span><span class="o"><<</span><span class="w"> </span><span class="s">"start: "</span><span class="w"> </span><span class="o"><<</span><span class="w"> </span><span class="n">ext</span><span class="o">-></span><span class="n">start_time</span><span class="w"> </span><span class="o"><<</span><span class="w"> </span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">;</span>
+</code></pre>
+
+</div>
+
+<p>The payload holds a <code>tlm_extension_base*</code> array — it knows nothing about the concrete extension types. The concrete type is recovered via <code>tlm_extension&lt;T&gt;::ID</code> — a runtime type tag generated once per concrete <code>T</code>. This is textbook type erasure.</p>
+
+<h3 id="4-heterogeneous-property-maps">4. Heterogeneous Property Maps</h3>
+
+<p>A type-safe property map where values can be any type:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PropertyMap</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unordered_map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">any</span><span class="o">&gt;</span><span class="w"> </span><span class="n">props_</span><span class="p">;</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">set</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">props_</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">template</span><span class="o"><</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">></span>
+<span class="w">    </span><span class="n">T</span><span class="w"> </span><span class="n">get</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&</span><span class="w"> </span><span class="n">key</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">any_cast</span><span class="o"><</span><span class="n">T</span><span class="o">></span><span class="p">(</span><span class="n">props_</span><span class="p">.</span><span class="n">at</span><span class="p">(</span><span class="n">key</span><span class="p">));</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="n">PropertyMap</span><span class="w"> </span><span class="n">cfg</span><span class="p">;</span>
+<span class="n">cfg</span><span class="p">.</span><span class="n">set</span><span class="p">(</span><span class="s">"timeout_ns"</span><span class="p">,</span><span class="w"> </span><span class="mi">100</span><span class="p">);</span>
+<span class="n">cfg</span><span class="p">.</span><span class="n">set</span><span class="p">(</span><span class="s">"name"</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">(</span><span class="s">"initiator"</span><span class="p">));</span>
+<span class="n">cfg</span><span class="p">.</span><span class="n">set</span><span class="p">(</span><span class="s">"enable_coverage"</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">);</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">.</span><span class="n">get</span><span class="o"><</span><span class="kt">int</span><span class="o">></span><span class="p">(</span><span class="s">"timeout_ns"</span><span class="p">);</span>
+</code></pre>
+
+</div>
+
+<p>This pattern is invaluable for configuration systems, test harnesses, and generic component interfaces where the set of properties isn't known at compile time.</p>
+
+<h3 id="5-policy-injection-without-template-proliferation">5. Policy Injection Without Template Proliferation</h3>
+
+<p>One of the most practical — and underappreciated — uses of type erasure in production C++. Templates are excellent for zero-overhead abstraction, but they have a cost: <strong>template parameters propagate through the call stack</strong>. If your <code>Cache&lt;T, AllocPolicy, EvictionPolicy&gt;</code> has seven template parameters, every class that uses it gets those parameters too.</p>
+
+<p>Type erasure lets you stop the bleeding:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// Without type erasure: template parameters propagate upward</span>
+<span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">EvictionPolicy</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Cache</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">EvictionPolicy</span><span class="w"> </span><span class="n">policy_</span><span class="p">;</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">};</span>
+<span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">E</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Simulator</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">Cache</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;</span><span class="w"> </span><span class="n">cache_</span><span class="p">;</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">};</span>
+<span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">E</span><span class="o">&gt;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TopLevel</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">Simulator</span><span class="o">&lt;</span><span class="n">E</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sim_</span><span class="p">;</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">};</span>
+<span class="c1">// Now TopLevel&lt;LRU&gt;, TopLevel&lt;LFU&gt;, TopLevel&lt;Random&gt;...</span>
+<span class="c1">// Every layer knows about EvictionPolicy. Compile times suffer.</span>
+
+<span class="c1">// With type erasure: stop at the interface boundary</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Cache</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o"><</span><span class="kt">void</span><span class="p">(</span><span class="n">CacheKey</span><span class="p">)</span><span class="o">></span><span class="w"> </span><span class="n">on_evict_</span><span class="p">;</span><span class="w">   </span><span class="c1">// type-erased policy</span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="k">template</span><span class="o"><</span><span class="k">typename</span><span class="w"> </span><span class="nc">EvictionPolicy</span><span class="o">></span>
+<span class="w">    </span><span class="n">Cache</span><span class="p">(</span><span class="n">EvictionPolicy</span><span class="w"> </span><span class="n">p</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">on_evict_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">p</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
+<span class="p">};</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Simulator</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">Cache</span><span class="w"> </span><span class="n">cache_</span><span class="p">;</span><span class="w"> </span><span class="cm">/* no template params */</span><span class="w"> </span><span class="p">};</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TopLevel</span><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">Simulator</span><span class="w"> </span><span class="n">sim_</span><span class="p">;</span><span class="w"> </span><span class="cm">/* no template params */</span><span class="w"> </span><span class="p">};</span>
+<span class="c1">// Concrete policy chosen once at construction. Nobody else cares.</span>
+</code></pre>
+
+</div>
+
+<p>This is one of the best arguments for <code>std::function</code> over pure templates in class member positions — it contains the template blast radius.</p>
+
+<h3 id="6-plugin-systems-and-dynamic-loading">6. Plugin Systems and Dynamic Loading</h3>
+
+<p>When loading plugins at runtime (<code>dlopen</code>/<code>LoadLibrary</code>), the plugin's types can never be known at compile time. Type erasure is mandatory:</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// Plugin interface — the erased concept</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">IPlugin</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="n">Context</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="nf">name</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">virtual</span><span class="w"> </span><span class="o">~</span><span class="n">IPlugin</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="c1">// Plugin factory — returned from dlsym</span>
+<span class="k">extern</span><span class="w"> </span><span class="s">"C"</span><span class="w"> </span><span class="n">IPlugin</span><span class="o">*</span><span class="w"> </span><span class="n">create_plugin</span><span class="p">();</span>
+
+<span class="c1">// Host loads plugin without knowing its type</span>
+<span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dlopen</span><span class="p">(</span><span class="s">"my_plugin.so"</span><span class="p">,</span><span class="w"> </span><span class="n">RTLD_NOW</span><span class="p">);</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">factory</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">reinterpret_cast</span><span class="o"><</span><span class="n">IPlugin</span><span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="p">)()</span><span class="o">></span><span class="p">(</span><span class="n">dlsym</span><span class="p">(</span><span class="n">lib</span><span class="p">,</span><span class="w"> </span><span class="s">"create_plugin"</span><span class="p">));</span>
+<span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o"><</span><span class="n">IPlugin</span><span class="o">></span><span class="w"> </span><span class="n">plugin</span><span class="p">(</span><span class="n">factory</span><span class="p">());</span>
+
+<span class="n">plugin</span><span class="o">-></span><span class="n">execute</span><span class="p">(</span><span class="n">ctx</span><span class="p">);</span><span class="w">  </span><span class="c1">// concrete type? completely unknown. completely irrelevant.</span>
+</code></pre>
+
+</div>
+
+<hr />
+
+<h2 id="gotchas-where-type-erasure-hurts">Gotchas: Where Type Erasure Hurts</h2>
+
+<h3 id="1-heap-allocation-by-default">1. Heap Allocation by Default</h3>
+
+<p>Every <code>std::function</code> that doesn't fit in the SBO buffer allocates. In tight loops, this is measurable. Profile before assuming it's fine.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// Likely SBO (small lambda, no capture) — fast</span>
+<span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]{</span><span class="w"> </span><span class="o">++</span><span class="n">counter</span><span class="p">;</span><span class="w"> </span><span class="p">};</span>
+
+<span class="c1">// Likely heap (captures a vector or a large struct) — heap alloc</span>
+<span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o"><</span><span class="kt">int</span><span class="o">></span><span class="w"> </span><span class="n">big_data</span><span class="p">(</span><span class="mi">1000</span><span class="p">);</span>
+<span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o"><</span><span class="kt">void</span><span class="p">()</span><span class="o">></span><span class="w"> </span><span class="n">g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="n">big_data</span><span class="p">]{</span><span class="w"> </span><span class="n">process</span><span class="p">(</span><span class="n">big_data</span><span class="p">);</span><span class="w"> </span><span class="p">};</span>
+</code></pre>
+
+</div>
+
+<h3 id="2-you-lose-the-type-at-the-boundary-forever">2. You Lose the Type at the Boundary — Forever</h3>
+
+<p>Once erased, the type can only be recovered via <code>std::any_cast</code>, <code>dynamic_cast</code>, or a type-tag mechanism. If you need to recover the type often, that's a design smell — you may want <code>std::variant</code> instead.</p>
+
+<h3 id="3-stdfunction-is-not-zero-cost">3. <code>std::function</code> Is Not Zero-Cost</h3>
+
+<p>A direct template call is inlinable. A <code>std::function</code> call goes through a vtable (or function pointer internally). The call itself isn't free. For functions called millions of times per second, this matters.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// Template: inlinable, zero overhead</span>
+<span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">F</span><span class="o">&gt;</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">applyN</span><span class="p">(</span><span class="n">F</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">n</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="n">f</span><span class="p">(</span><span class="n">i</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+
+<span class="c1">// std::function: virtual dispatch per call</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">applyN</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o"><</span><span class="kt">void</span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="o">></span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o"><</span><span class="w"> </span><span class="n">n</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="n">f</span><span class="p">(</span><span class="n">i</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+</code></pre>
+
+</div>
+
+<h3 id="4-stdfunction-requires-copyability">4. <code>std::function</code> Requires Copyability</h3>
+
+<p><code>std::function</code> requires the wrapped type to be copy-constructible. Unique lambdas that capture <code>unique_ptr</code> can't go into <code>std::function</code>. Use <code>std::move_only_function</code> (C++23) or a hand-rolled move-only wrapper.</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="k">auto</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_unique</span><span class="o">&lt;</span><span class="n">Resource</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="c1">// This fails — can&#39;t copy a unique_ptr:</span>
+<span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">p</span><span class="p">)]{</span><span class="w"> </span><span class="n">p</span><span class="o">-&gt;</span><span class="n">use</span><span class="p">();</span><span class="w"> </span><span class="p">};</span><span class="w">  </span><span class="c1">// ERROR</span>
+
+<span class="c1">// C++23 solution:</span>
+<span class="n">std</span><span class="o">::</span><span class="n">move_only_function</span><span class="o"><</span><span class="kt">void</span><span class="p">()</span><span class="o">></span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">p</span><span class="p">)]{</span><span class="w"> </span><span class="n">p</span><span class="o">-></span><span class="n">use</span><span class="p">();</span><span class="w"> </span><span class="p">};</span><span class="w">  </span><span class="c1">// OK</span>
+</code></pre>
+
+</div>
+
+<h3 id="5-object-slicing-the-oop-variant">5. Object Slicing (the OOP variant)</h3>
+
+<p>If you use raw pointers or references to a base class (the OOP style of type erasure), forgetting <code>virtual</code> on the destructor causes slicing and leaks. Always use <code>virtual ~Base() = default;</code> on any type-erased base.</p>
+
+<h3 id="6-overhead-of-stdany">6. Overhead of <code>std::any</code></h3>
+
+<p><code>std::any</code> is the most permissive form of type erasure — it stores anything. It's also the heaviest. Avoid it in hot paths or tight containers. Prefer <code>std::variant</code> when the type set is known.</p>
+
+<hr />
+
+<h2 id="when-to-use-type-erasure-vs-templates">When to Use Type Erasure vs Templates</h2>
+
+<table>
+<thead>
+<tr>
+  <th>Situation</th>
+  <th>Prefer Templates</th>
+  <th>Prefer Type Erasure</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Types known at compile time</td>
+  <td>✓</td>
+  <td></td>
+</tr>
+<tr>
+  <td>Zero-overhead is critical</td>
+  <td>✓</td>
+  <td></td>
+</tr>
+<tr>
+  <td>Called in a hot loop (&gt;1M/s)</td>
+  <td>✓</td>
+  <td></td>
+</tr>
+<tr>
+  <td>Single call site, no container</td>
+  <td>✓</td>
+  <td></td>
+</tr>
+<tr>
+  <td>Types not known at compile time</td>
+  <td></td>
+  <td>✓</td>
+</tr>
+<tr>
+  <td>Storing mixed types in a container</td>
+  <td></td>
+  <td>✓</td>
+</tr>
+<tr>
+  <td>Template params bleeding into headers</td>
+  <td></td>
+  <td>✓</td>
+</tr>
+<tr>
+  <td>Plugin / runtime-loaded code</td>
+  <td></td>
+  <td>✓</td>
+</tr>
+<tr>
+  <td>Stable binary interface (ABI)</td>
+  <td></td>
+  <td>✓</td>
+</tr>
+<tr>
+  <td>Callback stored beyond the call site</td>
+  <td></td>
+  <td>✓</td>
+</tr>
+</tbody>
+</table>
+
+<p>The practical rule of thumb: <strong>use templates at the point of use; use type erasure at storage boundaries.</strong></p>
+
+<hr />
+
+<h2 id="compiler-and-performance-notes">Compiler and Performance Notes</h2>
+
+<h3 id="where-concrete-types-are-instantiated">Where Concrete Types Are Instantiated</h3>
+
+<p>The compiler generates a new <code>CallableModel&lt;T&gt;</code> specialization at the point where <code>MyFunction(T t)</code> (or <code>std::function&lt;F&gt;(T t)</code>) is called — the <em>type-erasure point</em>. This is typically in a .cpp file where the concrete <code>T</code> is known. Everything after that point sees only <code>CallableBase*</code> or <code>std::function&lt;F&gt;</code> — the concrete type is invisible.</p>
+
+<p><strong>Compile time implication:</strong> Type erasure <em>reduces</em> compile time compared to full template propagation. The concrete instantiation happens once, in one translation unit. Template-heavy code makes every including TU re-instantiate everything.</p>
+
+<h3 id="the-vtable-dispatch-cost">The Vtable Dispatch Cost</h3>
+
+<p>A virtual function call typically costs 1–5 ns on modern hardware — a table lookup plus an indirect branch. Branch predictors are good at predicting virtual calls that always go to the same concrete type. If your type-erased object always holds a <code>Logger</code>, the branch predictor will learn this quickly and the indirect call becomes nearly free.</p>
+
+<p>But if the concrete type changes unpredictably across calls — the branch predictor can't help, and you'll pay the full misprediction cost. In that case, consider <code>std::variant</code> + <code>std::visit</code>, which the compiler can turn into a branch table.</p>
+
+<h3 id="sbo-sizes-in-practice">SBO Sizes in Practice</h3>
+
+<p>GCC's libstdc++ and Clang's libc++ use different SBO sizes for <code>std::function</code>:
+- libstdc++: ~16 bytes usable (after overhead)
+- libc++: ~24 bytes usable</p>
+
+<p>A lambda capturing a single pointer fits. A lambda capturing a <code>std::string</code> may not. Measure with <code>-O2 -S</code> and check whether <code>operator new</code> appears in the output for your specific callable.</p>
+
+<h3 id="stdany-and-the-copy-overhead"><code>std::any</code> and the Copy Overhead</h3>
+
+<p><code>std::any</code> copies on every copy. If your <code>std::any</code> holds a large struct, every copy of the <code>std::any</code> deep-copies that struct. Use <code>std::reference_wrapper</code> or <code>std::shared_ptr</code> inside <code>std::any</code> to share ownership if deep-copy is expensive.</p>
+
+<hr />
+
+<h2 id="the-bigger-picture">The Bigger Picture</h2>
+
+<p>Type erasure sits at the intersection of two deep ideas in C++: <strong>zero-cost abstraction</strong> (templates) and <strong>runtime polymorphism</strong> (virtual dispatch). Neither alone is sufficient for the problems type erasure solves. Type erasure combines them: the concrete type gets a full template instantiation with all the zero-cost benefits — inlining, no dynamic dispatch within the model — while the outside world gets a stable, uniform, runtime-polymorphic interface.</p>
+
+<p>The compiler doesn't forget the type. You ask it to. And it does so precisely and safely, generating exactly the dispatch machinery needed for the type you gave it, at the exact moment you gave it, in the exact translation unit where that type is visible.</p>
+
+<p>That's not forgetting. That's encapsulation at its most deliberate.</p>
+
+<hr />
+
+<h2 id="quick-reference-card">Quick Reference Card</h2>
+
+<table>
+<thead>
+<tr>
+  <th>Mechanism</th>
+  <th>When to Use</th>
+  <th>Overhead</th>
+  <th>Types Fixed?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>std::function&lt;R(Args...)&gt;</code></td>
+  <td>Storing callables</td>
+  <td>SBO or heap</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td><code>std::any</code></td>
+  <td>Storing arbitrary values</td>
+  <td>SBO or heap</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td><code>std::variant&lt;T1,T2,...&gt;</code></td>
+  <td>Known type set</td>
+  <td>Zero (stack)</td>
+  <td>Yes</td>
+</tr>
+<tr>
+  <td><code>std::shared_ptr</code> deleter</td>
+  <td>Custom cleanup</td>
+  <td>Part of control block</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td><code>std::move_only_function</code> (C++23)</td>
+  <td>Non-copyable callables</td>
+  <td>SBO or heap</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>Virtual base + unique_ptr</td>
+  <td>Custom type erasure</td>
+  <td>Heap + vtable</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>Void pointer + function ptr</td>
+  <td>C interop</td>
+  <td>Zero</td>
+  <td>No</td>
+</tr>
+<tr>
+  <td>TLM extension mechanism</td>
+  <td>SystemC payload extensions</td>
+  <td>Heap + ID lookup</td>
+  <td>No</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<table>
+<thead>
+<tr>
+  <th>Pattern</th>
+  <th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Concept</td>
+  <td>The behavioral contract T must satisfy</td>
+</tr>
+<tr>
+  <td>Abstract base (<code>CallableBase</code>)</td>
+  <td>The erased interface — all the outside world sees</td>
+</tr>
+<tr>
+  <td>Template model (<code>CallableModel&lt;T&gt;</code>)</td>
+  <td>Where the compiler generates the concrete type handling</td>
+</tr>
+<tr>
+  <td>Owning wrapper (<code>MyFunction</code>)</td>
+  <td>The public API; manages the base pointer</td>
+</tr>
+<tr>
+  <td>SBO buffer</td>
+  <td>Avoids heap allocation for small objects</td>
+</tr>
+<tr>
+  <td>Type tag / ID</td>
+  <td>Allows type recovery after erasure (used in <code>std::any</code>, TLM extensions)</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<p><em>Have a type-erasure pattern you've used in the wild that didn't make this list? Drop it in the comments.</em></p>
+
+<hr />
+
+<p><em>Tags: C++, Templates, Type System, std::function, SystemC, Design Patterns</em></p>
+
+</div>
