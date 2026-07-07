@@ -120,7 +120,12 @@ std::future<R> enqueue_with_result(F&& task) {
    std::future<R> future = promise->get_future();
    enqueue([p = promise, t = std::forward<F>(task)]() mutable {
        try {
-           p->set_value(t());
+           if constexpr (std::is_void_v<R>) {
+               t();
+               p->set_value();
+           } else {
+               p->set_value(t());
+           }
        } catch (...) {
            p->set_exception(std::current_exception());
        }
