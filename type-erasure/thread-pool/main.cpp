@@ -1,427 +1,312 @@
 // =============================================================================
-// type_erasure_property_map.cpp
+// type_erasure_thread_pool.cpp
 //
-// Demonstrates: Type Erasure via a heterogeneous property map — a key-value
-// store where values can be of *any* type, retrieved type-safely by key.
+// Demonstrates: Type Erasure via a thread pool that accepts any callable —
+// lambdas, free functions, functors, std::bind — without knowing their types.
 //
 // Concepts shown:
-//   - std::any as the type erasure vehicle for values
-//   - A typed PropertyMap wrapper with get<T> / set<T> / has<T>
-//   - A stricter TypedPropertyMap with compile-time registered schema
-//   - A ComponentConfig use case (SystemC-style component configuration)
-//   - Observer pattern on top of a property map (change notification)
+//   - CallableBase / CallableModel<T> — the type erasure engine
+//   - ThreadPool — owns a queue of type-erased tasks
+//   - Workers that drain the queue on background threads
+//   - Return values via std::future + std::promise
 //
 // Build (C++17):
-//   g++ -std=c++17 -O2 type_erasure_property_map.cpp -o property_map_demo
+//   g++ -std=c++17 -O2 -pthread type_erasure_thread_pool.cpp -o thread_pool_demo
 //
 // Author: CodePuz  |  codepuz.com
 // =============================================================================
 #include <iostream>
-#include <unordered_map>
-#include <string>
-#include <any>
-#include <typeindex>
-#include <typeinfo>
 #include <functional>
+#include <future>
+#include <thread>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 #include <vector>
-#include <stdexcept>
+#include <chrono>
 #include <cassert>
-#include <optional>
 #include <sstream>
+#include <numeric>
+#include <utility>
 // =============================================================================
-// PART 1: PropertyMap — the core type-erased key/value store
+// PART 1: Type Erasure Engine
 //
-// Values are stored as std::any. The concrete type is erased at set() and
-// recovered at get<T>(). Any copy-constructible type can be a value.
+// We build our own simplified type-erased callable so you can see exactly
+// what std::function does under the hood.
 // =============================================================================
-class PropertyMap {
+// — The abstract interface (the "erased" view) —
+struct CallableBase {
+virtual void call() = 0;
+virtual ~CallableBase() = default;
+};
+// — The template wrapper (where the compiler stamps out concrete types) —
+//
+// For each T you pass into the pool, the compiler instantiates a fresh
+// CallableModel<T> with:
+//   - A stored copy of T
+//   - An overridden call() that invokes T::operator()()
+//
+// After construction, nobody outside needs to know T anymore.
+template<typename T>
+struct CallableModel : CallableBase {
+T callable_;
+explicit CallableModel(T t) : callable_(std::move(t)) {}
+void call() override { callable_(); }
+};
+// — The owning wrapper (the public API) —
+//
+// TypeErasedTask holds a CallableBase* and exposes operator().
+// It is move-only because we want unique ownership of the callable.
+class TypeErasedTask {
+CallableBase* ptr_ = nullptr;
 public:
-// ── Write ────────────────────────────────────────────────────────────────
+TypeErasedTask() = default;
 
-// set<T>: type T is erased into std::any here.
-// After this call, the map holds no compile-time knowledge of T.
+// Type-erasure point: any callable T becomes a CallableModel<T>
 template<typename T>
-void set(const std::string& key, T value) {
-   props_[key] = std::any(std::move(value));
+explicit TypeErasedTask(T callable)
+   : ptr_(new CallableModel<T>(std::move(callable))) {}
+// Move-only — no copying
+TypeErasedTask(const TypeErasedTask&) = delete;
+TypeErasedTask& operator=(const TypeErasedTask&) = delete;
+TypeErasedTask(TypeErasedTask&& other) noexcept
+   : ptr_(std::exchange(other.ptr_, nullptr)) {}
+TypeErasedTask& operator=(TypeErasedTask&& other) noexcept {
+   delete ptr_;
+   ptr_ = std::exchange(other.ptr_, nullptr);
+   return *this;
 }
-// ── Read ─────────────────────────────────────────────────────────────────
-// get<T>: recovers T from std::any.
-// Throws std::bad_any_cast if the stored type doesn't match T.
-template<typename T>
-T get(const std::string& key) const {
-   auto it = props_.find(key);
-   if (it == props_.end())
-       throw std::out_of_range("PropertyMap: key not found: " + key);
-   return std::any_cast<T>(it->second);
+void operator()() { if (ptr_) ptr_->call(); }
+~TypeErasedTask() { delete ptr_; }
+
+};
+// =============================================================================
+// PART 2: Thread Pool
+//
+// Owns N worker threads. Accepts any callable via enqueue().
+// The callable's type is erased at the enqueue boundary — workers
+// only see TypeErasedTask; they never know what the real callable is.
+// =============================================================================
+class ThreadPool {
+public:
+explicit ThreadPool(size_t num_threads) : stop_(false) {
+for (size_t i = 0; i < num_threads; ++i) {
+workers_.emplace_back([this] { worker_loop(); });
 }
-// get_or: returns a default value if the key is absent or type mismatches
-template<typename T>
-T get_or(const std::string& key, T default_val) const noexcept {
-   auto it = props_.find(key);
-   if (it == props_.end()) return default_val;
-   try {
-       return std::any_cast<T>(it->second);
-   } catch (const std::bad_any_cast&) {
-       return default_val;
-   }
 }
-// try_get: returns std::optional<T> — no exception, no default needed
-template<typename T>
-std::optional<T> try_get(const std::string& key) const noexcept {
-   auto it = props_.find(key);
-   if (it == props_.end()) return std::nullopt;
-   try {
-       return std::any_cast<T>(it->second);
-   } catch (const std::bad_any_cast&) {
-       return std::nullopt;
-   }
-}
-// ── Query ─────────────────────────────────────────────────────────────────
-bool has(const std::string& key) const {
-   return props_.count(key) > 0;
-}
-// has<T>: true only if the key exists AND holds exactly type T
-template<typename T>
-bool has(const std::string& key) const {
-   auto it = props_.find(key);
-   if (it == props_.end()) return false;
-   return it->second.type() == typeid(T);
-}
-void remove(const std::string& key) { props_.erase(key); }
-size_t size() const { return props_.size(); }
-// type_name_of: returns the stored type's name (for debugging)
-std::string type_name_of(const std::string& key) const {
-   auto it = props_.find(key);
-   if (it == props_.end()) return "<not found>";
-   return it->second.type().name();
-}
-// iterate all keys
+
+// enqueue(callable) — accepts ANY callable with signature void()
+//
+// The template T is deduced from the argument. A CallableModel<T> is
+// created here, inside this template. After this function returns,
+// the pool's queue holds only TypeErasedTask objects — T is gone.
 template<typename F>
-void for_each_key(F&& fn) const {
-   for (const auto& [k, _] : props_) fn(k);
+void enqueue(F&& task) {
+   {
+       std::unique_lock<std::mutex> lock(mtx_);
+       queue_.push(TypeErasedTask(std::forward<F>(task)));
+   }
+   cv_.notify_one();
 }
-
-private:
-std::unordered_map<std::string, std::any> props_;
-};
-// =============================================================================
-// PART 2: ObservablePropertyMap — change notification on top of PropertyMap
+// enqueue_with_result: returns a future so the caller can get a value back.
+// The callable F must return a value of type R.
 //
-// Demonstrates that type erasure composes: the observer callbacks are
-// themselves type-erased via std::function.
-// =============================================================================
-class ObservablePropertyMap : public PropertyMap {
-public:
-using ChangeCallback = std::function<void(const std::string& key)>;
-
-void on_change(ChangeCallback cb) {
-   observers_.push_back(std::move(cb));
-}
-template<typename T>
-void set(const std::string& key, T value) {
-   PropertyMap::set(key, std::move(value));
-   notify(key);
-}
-void remove(const std::string& key) {
-   PropertyMap::remove(key);
-   notify(key);
-}
-
-private:
-void notify(const std::string& key) {
-for (auto& cb : observers_) cb(key);
-}
-
-std::vector<ChangeCallback> observers_;
-
-};
-// =============================================================================
-// PART 3: ComponentConfig — a SystemC-style component configuration object
-//
-// Uses PropertyMap to hold mixed-type configuration for a hardware component.
-// The component itself is templated on nothing — it accepts any config value
-// type through the map.
-// =============================================================================
-struct ComponentConfig {
-PropertyMap params;
-
-void apply_defaults() {
-   if (!params.has("name"))           params.set("name",           std::string("unnamed"));
-   if (!params.has("clock_period_ns")) params.set("clock_period_ns", 10);
-   if (!params.has("enable_trace"))   params.set("enable_trace",   false);
-   if (!params.has("bus_width"))      params.set("bus_width",      32);
-   if (!params.has("timeout_us"))     params.set("timeout_us",     1000.0);
-}
-void print() const {
-   std::cout << "  ComponentConfig:\n";
-   params.for_each_key([&](const std::string& k) {
-       std::cout << "    " << k << " [" << params.type_name_of(k) << "]\n";
-   });
-}
-
-};
-// Simulated hardware component that reads its config from a PropertyMap
-class BusInitiator {
-ComponentConfig cfg_;
-public:
-explicit BusInitiator(ComponentConfig cfg) : cfg_(std::move(cfg)) {
-cfg_.apply_defaults();
-}
-
-void init() {
-   auto name     = cfg_.params.get<std::string>("name");
-   auto clk_ns   = cfg_.params.get<int>("clock_period_ns");
-   auto trace    = cfg_.params.get<bool>("enable_trace");
-   auto width    = cfg_.params.get<int>("bus_width");
-   auto timeout  = cfg_.params.get<double>("timeout_us");
-   std::cout << "  BusInitiator '" << name << "' initialised:\n"
-<< "    clock=" << clk_ns << "ns  width=" << width
-<< "bit  trace=" << (trace ? "ON" : "OFF")
-<< "  timeout=" << timeout << "us\n";
-}
-
-};
-// =============================================================================
-// PART 4: SchemaMap — a property map with a registered type schema
-//
-// Catches type mismatches at set() time rather than at get() time.
-// The schema maps key names to expected std::type_index values.
-// =============================================================================
-class SchemaMap {
-public:
-// Register a key with its expected type at setup time
-template<typename T>
-void register_key(const std::string& key) {
-schema_.insert_or_assign(key, std::type_index(typeid(T)));
-}
-
-template<typename T>
-void set(const std::string& key, T value) {
-   auto it = schema_.find(key);
-   if (it != schema_.end()) {
-       if (it->second != std::type_index(typeid(T))) {
-           throw std::invalid_argument(
-               "SchemaMap: type mismatch for key '" + key +
-               "': expected " + it->second.name() +
-               ", got " + typeid(T).name()
-           );
+// We wrap F in a lambda that sets a promise — the lambda is what gets
+// type-erased into a TypeErasedTask. R and F are both invisible to the pool.
+template<typename F, typename R = std::invoke_result_t<F>>
+std::future<R> enqueue_with_result(F&& task) {
+   auto promise = std::make_shared<std::promise<R>>();
+   std::future<R> future = promise->get_future();
+   enqueue([p = promise, t = std::forward<F>(task)]() mutable {
+       try {
+           p->set_value(t());
+       } catch (...) {
+           p->set_exception(std::current_exception());
        }
+   });
+   return future;
+}
+// Drain the queue and stop all workers
+~ThreadPool() {
+   {
+       std::unique_lock<std::mutex> lock(mtx_);
+       stop_ = true;
    }
-   props_[key] = std::any(std::move(value));
+   cv_.notify_all();
+   for (auto& w : workers_) w.join();
 }
-template<typename T>
-T get(const std::string& key) const {
-   auto it = props_.find(key);
-   if (it == props_.end())
-       throw std::out_of_range("SchemaMap: key not found: " + key);
-   return std::any_cast<T>(it->second);
+size_t queue_size() const {
+   std::unique_lock<std::mutex> lock(mtx_);
+   return queue_.size();
 }
-bool has(const std::string& key) const { return props_.count(key) > 0; }
 
 private:
-std::unordered_map<std::string, std::type_index> schema_;
-std::unordered_map<std::string, std::any>        props_;
+void worker_loop() {
+while (true) {
+TypeErasedTask task;
+{
+std::unique_lock<std::mutex> lock(mtx_);
+cv_.wait(lock, [this] { return stop_ || !queue_.empty(); });
+if (stop_ && queue_.empty()) return;
+task = std::move(queue_.front());
+queue_.pop();
+}
+task(); // concrete type was erased; we just call it
+}
+}
+
+std::vector<std::thread>       workers_;
+std::queue<TypeErasedTask>     queue_;
+mutable std::mutex             mtx_;
+std::condition_variable        cv_;
+bool                           stop_;
+
 };
 // =============================================================================
-// PART 5: Test Bench
+// PART 3: Test Bench
+//
+// Five test scenarios that exercise the type erasure from different angles.
 // =============================================================================
-// ── Test 1: Basic set / get / type safety ────────────────────────────────────
-void test_basic_operations() {
-std::cout << "\n=== Test 1: Basic set / get / type safety ===\n";
-
-PropertyMap map;
-map.set("timeout_ns",      100);
-map.set("name",            std::string("initiator_0"));
-map.set("enable_coverage", true);
-map.set("threshold",       3.14);
-map.set("tag",             std::string("v2.1"));
-assert(map.get<int>("timeout_ns")          == 100);
-assert(map.get<std::string>("name")        == "initiator_0");
-assert(map.get<bool>("enable_coverage")    == true);
-assert(map.get<double>("threshold")        == 3.14);
-assert(map.size()                          == 5);
-std::cout << "  PASS: get<T> recovered all values correctly\n";
-// has<T> — type-aware existence check
-assert( map.has<int>("timeout_ns"));
-assert(!map.has<double>("timeout_ns"));   // stored as int, not double
-assert( map.has<std::string>("name"));
-std::cout << "  PASS: has<T> correctly distinguishes types\n";
-// Wrong type throws bad_any_cast
-try {
-   auto val = map.get<double>("timeout_ns");  // stored as int!
-   (void)val;
-   std::cout << "  FAIL: expected bad_any_cast\n";
-} catch (const std::bad_any_cast&) {
-   std::cout << "  PASS: bad_any_cast thrown on type mismatch\n";
+// Utility: thread-safe logger for test output
+class SafeLogger {
+std::mutex mtx_;
+public:
+template<typename... Args>
+void log(Args&&... args) {
+std::unique_lock<std::mutex> lock(mtx_);
+(std::cout << ... << std::forward<Args>(args)) << '\n';
 }
-// Missing key throws out_of_range
-try {
-   map.get<int>("nonexistent");
-   std::cout << "  FAIL: expected out_of_range\n";
-} catch (const std::out_of_range&) {
-   std::cout << "  PASS: out_of_range thrown on missing key\n";
-}
-
-}
-// ── Test 2: get_or and try_get ───────────────────────────────────────────────
-void test_safe_accessors() {
-std::cout << "\n=== Test 2: Safe accessors (get_or / try_get) ===\n";
-
-PropertyMap map;
-map.set("retries", 3);
-// get_or: default on missing key
-int r1 = map.get_or<int>("retries",   99);   // exists
-int r2 = map.get_or<int>("missing",   99);   // missing
-assert(r1 == 3);
-assert(r2 == 99);
-std::cout << "  PASS: get_or returned " << r1 << " (exists) and " << r2 << " (missing)\n";
-// try_get: optional
-auto o1 = map.try_get<int>("retries");
-auto o2 = map.try_get<int>("missing");
-assert( o1.has_value() && *o1 == 3);
-assert(!o2.has_value());
-std::cout << "  PASS: try_get returned optional correctly\n";
-// type mismatch: get_or returns default, try_get returns nullopt
-int r3   = map.get_or<double>("retries", 7.7);  // wrong type
-auto o3  = map.try_get<std::string>("retries");  // wrong type
-assert(r3 == 7);         // double 7.7 -> int default
-assert(!o3.has_value());
-std::cout << "  PASS: type-mismatch handled gracefully by safe accessors\n";
-
-}
-// ── Test 3: Heterogeneous value types including user-defined structs ─────────
-void test_user_defined_types() {
-std::cout << "\n=== Test 3: User-defined struct as value type ===\n";
-
-struct Waveform {
-   std::string signal_name;
-   double      frequency_mhz;
-   int         samples;
-   bool operator==(const Waveform& o) const {
-       return signal_name == o.signal_name &&
-              frequency_mhz == o.frequency_mhz &&
-              samples == o.samples;
-   }
 };
-PropertyMap map;
-map.set("clk",  Waveform{"CLK",  100.0, 1024});
-map.set("data", Waveform{"DATA",  50.0,  512});
-map.set("desc", std::string("AXI bus capture"));
-auto clk = map.get<Waveform>("clk");
-assert(clk == (Waveform{"CLK", 100.0, 1024}));
-std::cout << "  PASS: Waveform struct stored and recovered via std::any\n";
-// The map doesn't care what the type is — it stores and returns faithfully
-auto data = map.get<Waveform>("data");
-assert(data.frequency_mhz == 50.0);
-std::cout << "  PASS: second Waveform (" << data.signal_name
-<< " @ " << data.frequency_mhz << " MHz) recovered correctly\n";
+SafeLogger g_log;
+// A named functor — a callable object with state, a distinct type
+struct NumberCruncher {
+int multiplier;
+int input;
+std::atomic<int>* result;
 
+void operator()() const {
+   int val = multiplier * input;
+   result->store(val, std::memory_order_relaxed);
+   g_log.log("  [NumberCruncher] ", input, " x ", multiplier, " = ", val);
 }
-// ── Test 4: ComponentConfig + BusInitiator ───────────────────────────────────
-void test_component_config() {
-std::cout << "\n=== Test 4: ComponentConfig (SystemC-style) ===\n";
 
-ComponentConfig cfg;
-cfg.params.set("name",            std::string("axi_initiator_0"));
-cfg.params.set("clock_period_ns", 5);
-cfg.params.set("enable_trace",    true);
-cfg.params.set("bus_width",       64);
-cfg.params.set("timeout_us",      500.0);
-cfg.print();
-BusInitiator initiator(cfg);
-initiator.init();
-std::cout << "  PASS: BusInitiator configured from heterogeneous PropertyMap\n";
-
+};
+// A plain free function — another distinct type
+void log_separator() {
+g_log.log("  [FreeFunction] — separator task ran —");
 }
-// ── Test 5: ObservablePropertyMap ────────────────────────────────────────────
-void test_observable_map() {
-std::cout << "\n=== Test 5: Observable property map (change notification) ===\n";
+// — Test 1: Mix of lambdas, free functions, and functors —
+void test_heterogeneous_callables() {
+g_log.log("\n=== Test 1: Heterogeneous callables ===");
+ThreadPool pool(2);
+std::atomic<int> result{0};
 
-ObservablePropertyMap map;
-std::vector<std::string> changed_keys;
-// Register a type-erased observer callback
-map.on_change([&](const std::string& key) {
-   changed_keys.push_back(key);
-   std::cout << "  [observer] key changed: " << key << "\n";
+// Lambda — type: unique compiler-generated closure type
+pool.enqueue([&] {
+   g_log.log("  [Lambda] hello from a lambda");
 });
-map.set("x", 10);
-map.set("y", 20);
-map.set("label", std::string("origin"));
-map.remove("label");
-assert(changed_keys.size() == 4);
-assert(changed_keys[0] == "x");
-assert(changed_keys[1] == "y");
-assert(changed_keys[2] == "label");
-assert(changed_keys[3] == "label");  // remove also notifies
-std::cout << "  PASS: " << changed_keys.size() << " change notifications received\n";
+// Free function pointer — type: void(*)()
+pool.enqueue(&log_separator);
+// Functor — type: NumberCruncher
+pool.enqueue(NumberCruncher{7, 6, &result});
+// Another lambda — a *different* closure type from the first
+pool.enqueue([&] {
+   g_log.log("  [Lambda2] I am a different closure type from Lambda1");
+});
+// Give workers time to drain
+std::this_thread::sleep_for(std::chrono::milliseconds(100));
+assert(result.load() == 42);
+g_log.log("  PASS: NumberCruncher result == 42");
 
 }
-// ── Test 6: SchemaMap — type-checked at set() time ───────────────────────────
-void test_schema_map() {
-std::cout << "\n=== Test 6: SchemaMap — schema-enforced types ===\n";
+// — Test 2: Return values via future —
+void test_return_values() {
+g_log.log("\n=== Test 2: Return values via std::future ===");
+ThreadPool pool(2);
 
-SchemaMap map;
-map.register_key<int>("port");
-map.register_key<std::string>("host");
-map.register_key<bool>("secure");
-map.set("port",   8080);
-map.set("host",   std::string("localhost"));
-map.set("secure", true);
-assert(map.get<int>("port")         == 8080);
-assert(map.get<std::string>("host") == "localhost");
-assert(map.get<bool>("secure")      == true);
-std::cout << "  PASS: schema-correct values accepted\n";
-// Type mismatch caught at set() — not at get()
+// Enqueue tasks that return values — types are fully erased inside the pool
+auto f1 = pool.enqueue_with_result([] { return 100; });
+auto f2 = pool.enqueue_with_result([] { return std::string("hello from future"); });
+auto f3 = pool.enqueue_with_result([] {
+   std::this_thread::sleep_for(std::chrono::milliseconds(10));
+   return 3.14159;
+});
+g_log.log("  f1 (int)    = ", f1.get());
+g_log.log("  f2 (string) = ", f2.get());
+g_log.log("  f3 (double) = ", f3.get());
+
+}
+// — Test 3: Exception propagation through type erasure —
+void test_exception_propagation() {
+g_log.log("\n=== Test 3: Exception propagation ===");
+ThreadPool pool(1);
+
+auto f = pool.enqueue_with_result([]  {
+   throw std::runtime_error("intentional error from inside type-erased task");
+   return 0;
+});
 try {
-   map.set("port", std::string("not-an-int"));  // wrong type!
-   std::cout << "  FAIL: expected invalid_argument\n";
-} catch (const std::invalid_argument& e) {
-   std::cout << "  PASS: schema violation caught at set(): " << e.what() << "\n";
+   int val = f.get();  // rethrows the stored exception
+   (void)val;
+   g_log.log("  FAIL: expected exception was not thrown");
+} catch (const std::runtime_error& e) {
+   g_log.log("  PASS: caught exception: ", e.what());
 }
-// Unregistered keys are accepted with any type (open schema)
-map.set("extra", 3.14);
-assert(map.get<double>("extra") == 3.14);
-std::cout << "  PASS: unregistered key accepted with any type\n";
 
 }
-// ── Test 7: Overwrite and remove ─────────────────────────────────────────────
-void test_overwrite_and_remove() {
-std::cout << "\n=== Test 7: Overwrite and remove ===\n";
+// — Test 4: High-volume throughput —
+void test_throughput() {
+g_log.log("\n=== Test 4: Throughput — 10000 tasks, 4 workers ===");
+ThreadPool pool(4);
 
-PropertyMap map;
-map.set("mode", std::string("fast"));
-assert(map.get<std::string>("mode") == "fast");
-// Overwrite with same type
-map.set("mode", std::string("slow"));
-assert(map.get<std::string>("mode") == "slow");
-std::cout << "  PASS: overwrite same type\n";
-// Overwrite with different type — std::any just replaces
-map.set("mode", 42);
-assert(map.get<int>("mode") == 42);
-assert(!map.has<std::string>("mode"));  // old type is gone
-std::cout << "  PASS: overwrite with different type — old type erased\n";
-// Remove
-map.remove("mode");
-assert(!map.has("mode"));
-std::cout << "  PASS: remove works correctly\n";
+const int N = 10000;
+std::atomic<int> counter{0};
+std::vector<std::future<void>> futures;
+auto t_start = std::chrono::steady_clock::now();
+for (int i = 0; i < N; ++i) {
+   futures.push_back(pool.enqueue_with_result([&counter] {
+       counter.fetch_add(1, std::memory_order_relaxed);
+   }));
+}
+for (auto& f : futures) f.get();
+auto t_end = std::chrono::steady_clock::now();
+auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
+assert(counter.load() == N);
+g_log.log("  PASS: ", N, " tasks completed in ", ms, " ms — counter = ", counter.load());
+
+}
+// — Test 5: Capturing large state (forces heap alloc beyond SBO) —
+void test_large_capture() {
+g_log.log("\n=== Test 5: Large captured state ===");
+ThreadPool pool(2);
+
+// A vector with 1000 ints — far too large for any SBO buffer.
+// The type erasure still works correctly; it just heap-allocates the model.
+std::vector<int> big_data(1000);
+std::iota(big_data.begin(), big_data.end(), 1);  // 1..1000
+auto f = pool.enqueue_with_result([big_data] {  // captured by value
+   return std::accumulate(big_data.begin(), big_data.end(), 0);
+});
+int sum = f.get();
+assert(sum == 500500);  // sum of 1..1000
+g_log.log("  PASS: sum of 1..1000 = ", sum);
 
 }
 // =============================================================================
-// PART 6: main
+// PART 4: main
 // =============================================================================
 int main() {
 std::cout << "=================================================\n";
-std::cout << " Type Erasure — Heterogeneous Property Map Demo\n";
+std::cout << " Type Erasure — Thread Pool Demo\n";
 std::cout << " codepuz.com\n";
 std::cout << "=================================================\n";
 
-test_basic_operations();
-test_safe_accessors();
-test_user_defined_types();
-test_component_config();
-test_observable_map();
-test_schema_map();
-test_overwrite_and_remove();
+test_heterogeneous_callables();
+test_return_values();
+test_exception_propagation();
+test_throughput();
+test_large_capture();
 std::cout << "\nAll tests passed.\n";
 return 0;
 
