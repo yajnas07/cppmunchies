@@ -407,22 +407,227 @@ std::cout << "  PASS: remove works correctly\n";
 
 }
 // =============================================================================
-// PART 6: main
+// PART 6: Examples — practical usage walkthrough
+//
+// Run by default (no flags).  Shows how each class is meant to be used in
+// realistic scenarios, including graceful error handling.
 // =============================================================================
-int main() {
-std::cout << "=================================================\n";
-std::cout << " Type Erasure — Heterogeneous Property Map Demo\n";
-std::cout << " codepuz.com\n";
-std::cout << "=================================================\n";
+void run_examples() {
+    std::cout << "\n--------------------------------------------------\n";
+    std::cout << " EXAMPLE 1: Basic heterogeneous config store\n";
+    std::cout << "--------------------------------------------------\n";
+    {
+        // A PropertyMap can hold any mix of types under plain string keys.
+        // The concrete type is erased into std::any at set() and recovered
+        // type-safely at get<T>().
+        PropertyMap cfg;
+        cfg.set("bus_width",      64);
+        cfg.set("clock_period_ns", 5);
+        cfg.set("model_name",      std::string("axi_lite_v2"));
+        cfg.set("enable_trace",    true);
+        cfg.set("voltage",         1.8);
 
-test_basic_operations();
-test_safe_accessors();
-test_user_defined_types();
-test_component_config();
-test_observable_map();
-test_schema_map();
-test_overwrite_and_remove();
-std::cout << "\nAll tests passed.\n";
-return 0;
+        std::cout << "  bus_width      = " << cfg.get<int>("bus_width")         << " bits\n";
+        std::cout << "  clock_period   = " << cfg.get<int>("clock_period_ns")   << " ns\n";
+        std::cout << "  model_name     = " << cfg.get<std::string>("model_name") << "\n";
+        std::cout << "  enable_trace   = " << std::boolalpha
+                                           << cfg.get<bool>("enable_trace")     << "\n";
+        std::cout << "  voltage        = " << cfg.get<double>("voltage")        << " V\n";
+    }
 
+    std::cout << "\n--------------------------------------------------\n";
+    std::cout << " EXAMPLE 2: Safe accessors - no exceptions needed\n";
+    std::cout << "--------------------------------------------------\n";
+    {
+        PropertyMap cfg;
+        cfg.set("retries", 3);
+
+        // get_or: returns a default when key is absent or type mismatches
+        int  r1 = cfg.get_or<int>("retries",  0);    // key exists  → 3
+        int  r2 = cfg.get_or<int>("timeout",  500);  // key absent  → 500
+        auto o1 = cfg.try_get<int>("retries");        // Some(3)
+        auto o2 = cfg.try_get<int>("missing");        // None
+
+        std::cout << "  get_or(retries, 0)   = " << r1 << "\n";
+        std::cout << "  get_or(timeout, 500) = " << r2 << "  (key absent - default used)\n";
+        std::cout << "  try_get(retries)     = " << (o1 ? std::to_string(*o1) : "nullopt") << "\n";
+        std::cout << "  try_get(missing)     = " << (o2 ? std::to_string(*o2) : "nullopt") << "\n";
+
+        // Requesting the wrong type also uses the default gracefully
+        double wrong = cfg.get_or<double>("retries", -1.0);
+        std::cout << "  get_or<double>(retries, -1) = " << wrong
+                  << "  (stored as int -> default returned)\n";
+    }
+
+    std::cout << "\n--------------------------------------------------\n";
+    std::cout << " EXAMPLE 3: Type mismatch - what happens\n";
+    std::cout << "--------------------------------------------------\n";
+    {
+        PropertyMap cfg;
+        cfg.set("port", 8080);  // stored as int
+
+        // Correct retrieval
+        std::cout << "  get<int>(\"port\")    = " << cfg.get<int>("port") << "\n";
+
+        // Wrong type → bad_any_cast
+        try {
+            std::string s = cfg.get<std::string>("port");  // wrong!
+            (void)s;
+        } catch (const std::bad_any_cast&) {
+            std::cout << "  get<string>(\"port\") -> caught std::bad_any_cast  [ok]\n";
+        }
+
+        // Missing key → out_of_range
+        try {
+            cfg.get<int>("host");
+        } catch (const std::out_of_range& e) {
+            std::cout << "  get<int>(\"host\")    -> caught std::out_of_range: "
+                      << e.what() << "  [ok]\n";
+        }
+    }
+
+    std::cout << "\n--------------------------------------------------\n";
+    std::cout << " EXAMPLE 4: Storing a user-defined struct\n";
+    std::cout << "--------------------------------------------------\n";
+    {
+        // std::any works with any copy-constructible type — not just primitives.
+        struct ClockSpec {
+            std::string name;
+            double      freq_mhz;
+            int         duty_cycle_pct;
+        };
+
+        PropertyMap cfg;
+        cfg.set("sys_clk",  ClockSpec{"SYS_CLK",  200.0, 50});
+        cfg.set("pcie_clk", ClockSpec{"PCIE_CLK", 100.0, 50});
+        cfg.set("label",    std::string("platform_clocks"));
+
+        auto sys = cfg.get<ClockSpec>("sys_clk");
+        std::cout << "  sys_clk:  " << sys.name
+                  << "  @ " << sys.freq_mhz << " MHz"
+                  << "  duty=" << sys.duty_cycle_pct << "%\n";
+
+        auto pcie = cfg.get<ClockSpec>("pcie_clk");
+        std::cout << "  pcie_clk: " << pcie.name
+                  << " @ " << pcie.freq_mhz << " MHz"
+                  << "  duty=" << pcie.duty_cycle_pct << "%\n";
+
+        std::cout << "  label:    " << cfg.get<std::string>("label") << "\n";
+        std::cout << "  (ClockSpec, ClockSpec, and string all stored in the same map)\n";
+    }
+
+    std::cout << "\n--------------------------------------------------\n";
+    std::cout << " EXAMPLE 5: Observable map - reacting to changes\n";
+    std::cout << "--------------------------------------------------\n";
+    {
+        ObservablePropertyMap live;
+
+        // Register an observer — its type is erased via std::function
+        live.on_change([](const std::string& key) {
+            std::cout << "  [observer] property changed: \"" << key << "\"\n";
+        });
+
+        std::cout << "  Setting properties...\n";
+        live.set("voltage",    1.0);
+        live.set("frequency",  500);
+        live.set("state",      std::string("idle"));
+        live.set("state",      std::string("running"));  // update triggers again
+        live.remove("voltage");                           // remove also notifies
+    }
+
+    std::cout << "\n--------------------------------------------------\n";
+    std::cout << " EXAMPLE 6: SchemaMap - enforce types at set() time\n";
+    std::cout << "--------------------------------------------------\n";
+    {
+        // SchemaMap lets you register expected types up-front.
+        // A type mismatch at set() throws immediately — not later at get().
+        SchemaMap schema;
+        schema.register_key<int>("port");
+        schema.register_key<std::string>("host");
+        schema.register_key<bool>("tls");
+
+        schema.set("port", 443);
+        schema.set("host", std::string("localhost"));
+        schema.set("tls",  true);
+
+        std::cout << "  port = " << schema.get<int>("port")         << "\n";
+        std::cout << "  host = " << schema.get<std::string>("host") << "\n";
+        std::cout << "  tls  = " << std::boolalpha
+                                 << schema.get<bool>("tls")         << "\n";
+
+        // Attempt to set the wrong type for a registered key
+        try {
+            schema.set("port", std::string("not-a-number"));
+        } catch (const std::invalid_argument& e) {
+            std::cout << "  set(\"port\", string) -> " << e.what() << "  [ok]\n";
+        }
+    }
+
+    std::cout << "\n--------------------------------------------------\n";
+    std::cout << " EXAMPLE 7: Overwrite and dynamic type change\n";
+    std::cout << "--------------------------------------------------\n";
+    {
+        PropertyMap cfg;
+        cfg.set("mode", std::string("fast"));
+        std::cout << "  mode (string) = " << cfg.get<std::string>("mode") << "\n";
+
+        // Overwrite with a different type — the old type is fully replaced
+        cfg.set("mode", 42);
+        std::cout << "  mode (int)    = " << cfg.get<int>("mode")
+                  << "  (string is gone - std::any replaced)\n";
+        std::cout << "  has<string>(mode) = " << std::boolalpha
+                                              << cfg.has<std::string>("mode") << "\n";
+
+        cfg.remove("mode");
+        std::cout << "  After remove: has(mode) = " << cfg.has("mode") << "\n";
+    }
+
+    std::cout << "\n";
+}
+
+// =============================================================================
+// PART 7: main
+// =============================================================================
+static void print_usage(const char* prog) {
+    std::cout << "Usage: " << prog << " [-test]\n\n"
+              << "  (no flags)  Run usage examples that show the API in action\n"
+              << "  -test       Run the full test suite with assertions\n";
+}
+
+int main(int argc, char* argv[]) {
+    std::cout << "=================================================\n";
+    std::cout << " Type Erasure - Heterogeneous Property Map\n";
+    std::cout << " codepuz.com\n";
+    std::cout << "=================================================\n";
+
+    // ── parse flags ───────────────────────────────────────────────────────
+    bool run_tests = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg(argv[i]);
+        if (arg == "-test" || arg == "--test") {
+            run_tests = true;
+        } else {
+            std::cerr << "Unknown flag: " << arg << "\n";
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (run_tests) {
+        // ── full test suite ───────────────────────────────────────────────
+        std::cout << "\nRunning test suite...\n";
+        test_basic_operations();
+        test_safe_accessors();
+        test_user_defined_types();
+        test_component_config();
+        test_observable_map();
+        test_schema_map();
+        test_overwrite_and_remove();
+        std::cout << "\nAll tests passed.\n";
+    } else {
+        // ── examples (default) ────────────────────────────────────────────
+        run_examples();
+    }
+
+    return 0;
 }

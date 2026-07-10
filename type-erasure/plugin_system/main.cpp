@@ -412,7 +412,206 @@ const std::vector<Record>& records() const { return records_; }
 };
 
 // =============================================================================
-// PART 4: Test Bench
+// PART 4: Examples — practical usage walkthrough
+//
+// Run by default (no flags). Shows how each class is meant to be used in
+// realistic scenarios without assertions.
+// =============================================================================
+
+static void demo_separator(const std::string& title) {
+    std::cout << "\n--------------------------------------------------\n";
+    std::cout << " " << title << "\n";
+    std::cout << "--------------------------------------------------\n";
+}
+
+void run_examples() {
+
+    demo_separator("EXAMPLE 1: Full processing pipeline — all four plugins");
+    {
+        // Register four plugins of completely different concrete types.
+        // After register_plugin() the registry holds only IPlugin* —
+        // the concrete types LoggerPlugin, ValidatorPlugin, etc. are erased.
+        PluginRegistry registry;
+        registry.register_plugin(std::make_unique<LoggerPlugin>());
+        registry.register_plugin(std::make_unique<ValidatorPlugin>());
+        registry.register_plugin(std::make_unique<TransformerPlugin>());
+        registry.register_plugin(std::make_unique<ProfilerPlugin>());
+
+        registry.initialize_all("verbose");
+
+        Message msg;
+        msg.topic   = "sensor_data";
+        msg.payload = "  temperature=42.5  ";   // leading/trailing spaces
+
+        std::cout << "\n  Sending message: topic='" << msg.topic
+                  << "'  payload='" << msg.payload << "'\n\n";
+
+        bool ok = registry.process(msg);
+
+        std::cout << "\n  Result:\n";
+        std::cout << "    pipeline ok  : " << std::boolalpha << ok << "\n";
+        std::cout << "    topic        : " << msg.topic   << "  (uppercased by Transformer)\n";
+        std::cout << "    payload      : " << msg.payload << "  (trimmed by Transformer)\n";
+        std::cout << "    profiler_us  : " << msg.meta["profiler_us"] << "\n";
+        std::cout << "    transformed  : " << msg.meta["transformed"]  << "\n";
+
+        registry.print_status();
+        registry.shutdown_all();
+    }
+
+    demo_separator("EXAMPLE 2: Validator halts the pipeline on bad input");
+    {
+        // When a plugin returns false from process(), the registry stops
+        // dispatching. Plugins registered after the failing one never run.
+        PluginRegistry registry;
+        registry.register_plugin(std::make_unique<LoggerPlugin>());
+        registry.register_plugin(std::make_unique<ValidatorPlugin>());
+        registry.register_plugin(std::make_unique<TransformerPlugin>());
+
+        registry.initialize_all();
+
+        // Case A: empty topic — Validator rejects, Transformer never runs
+        {
+            Message msg;
+            msg.topic   = "";
+            msg.payload = "some data";
+            std::cout << "\n  [A] Empty topic:\n";
+            bool ok = registry.process(msg);
+            std::cout << "    pipeline ok : " << ok          << "\n";
+            std::cout << "    msg.valid   : " << msg.valid   << "\n";
+            std::cout << "    msg.status  : " << msg.status  << "  (400 Bad Request)\n";
+            std::cout << "    transformed : "
+                      << (msg.meta.count("transformed") ? "yes" : "no — Transformer did not run")
+                      << "\n";
+        }
+
+        // Case B: payload too large — Validator rejects with 413
+        {
+            Message msg;
+            msg.topic   = "upload";
+            msg.payload = std::string(512, 'x');
+            std::cout << "\n  [B] Oversized payload (" << msg.payload.size() << " bytes):\n";
+            bool ok = registry.process(msg);
+            std::cout << "    pipeline ok : " << ok         << "\n";
+            std::cout << "    msg.status  : " << msg.status << "  (413 Payload Too Large)\n";
+        }
+
+        registry.shutdown_all();
+    }
+
+    demo_separator("EXAMPLE 3: Capability-filtered dispatch");
+    {
+        // process_capable() only invokes plugins that advertise a given flag.
+        // Other plugins are silently skipped — the caller doesn't need to know
+        // which concrete types are registered.
+        PluginRegistry registry;
+        registry.register_plugin(std::make_unique<LoggerPlugin>());
+        registry.register_plugin(std::make_unique<ValidatorPlugin>());
+        registry.register_plugin(std::make_unique<ProfilerPlugin>());
+        registry.initialize_all();
+
+        Message msg;
+        msg.topic   = "perf_probe";
+        msg.payload = "benchmark_data";
+
+        std::cout << "\n  Running only Profiling-capable plugins...\n\n";
+        bool ok = registry.process_capable(msg, Capability::Profiling);
+
+        std::cout << "  pipeline ok  : " << ok << "\n";
+        std::cout << "  profiler_us  : " << msg.meta["profiler_us"]
+                  << "  (set by Profiler)\n";
+        std::cout << "  topic        : " << msg.topic
+                  << "  (unchanged — Transformer not in registry)\n";
+        std::cout << "  Logger and Validator were skipped (different capabilities)\n";
+
+        registry.shutdown_all();
+    }
+
+    demo_separator("EXAMPLE 4: Multiple messages — stateful plugins accumulate");
+    {
+        // Each plugin maintains its own internal state across many messages.
+        // The registry and host are oblivious to that state — type erasure
+        // keeps the concrete plugin state completely private.
+        PluginRegistry registry;
+        registry.register_plugin(std::make_unique<LoggerPlugin>());
+        registry.register_plugin(std::make_unique<ValidatorPlugin>());
+        registry.register_plugin(std::make_unique<TransformerPlugin>());
+        registry.initialize_all("verbose");
+
+        std::vector<std::pair<std::string, std::string>> batch = {
+            {"ping",    "hello world"},
+            {"status",  "  ok  "},
+            {"metrics", "cpu=12 mem=44"},
+            {"",        "bad — empty topic"},   // will be rejected
+            {"data",    "payload_five"},
+        };
+
+        std::cout << "\n  Processing " << batch.size() << " messages:\n\n";
+
+        int passed = 0, rejected = 0;
+        for (auto& [topic, payload] : batch) {
+            Message msg;
+            msg.topic   = topic;
+            msg.payload = payload;
+            if (registry.process(msg)) {
+                ++passed;
+                std::cout << "    OK  topic='" << msg.topic
+                          << "'  payload='" << msg.payload << "'\n";
+            } else {
+                ++rejected;
+                std::cout << "    ERR topic='" << topic
+                          << "'  status=" << msg.status << "\n";
+            }
+        }
+
+        std::cout << "\n  Summary: passed=" << passed
+                  << "  rejected=" << rejected << "\n";
+        registry.print_status();
+        registry.shutdown_all();
+    }
+
+    demo_separator("EXAMPLE 5: Plugin lookup and selective downcast");
+    {
+        // find() returns IPlugin* — the type-erased view.
+        // dynamic_cast lets you "un-erase" when you truly need the concrete API.
+        // This is intentionally rare: the whole point of type erasure is to
+        // avoid needing the concrete type.
+        PluginRegistry registry;
+        registry.register_plugin(std::make_unique<LoggerPlugin>());
+        registry.register_plugin(std::make_unique<ProfilerPlugin>());
+        registry.initialize_all();
+
+        for (int i = 0; i < 3; ++i) {
+            Message msg{"event_" + std::to_string(i), "data"};
+            registry.process(msg);
+        }
+
+        // Generic lookup — no concrete type needed
+        IPlugin* p = registry.find("Profiler");
+        std::cout << "\n  Found via IPlugin*: name='" << p->name()
+                  << "'  version=" << p->version() << "\n";
+        std::cout << "  Status: " << p->status_report() << "\n";
+
+        // Targeted downcast to access profiler-specific records()
+        auto* profiler = dynamic_cast<ProfilerPlugin*>(p);
+        if (profiler) {
+            std::cout << "  Downcast OK — " << profiler->records().size()
+                      << " profiler record(s) accessible via concrete API\n";
+        }
+
+        // Logger also via IPlugin* — no need to know it's a LoggerPlugin
+        IPlugin* logger = registry.find("Logger");
+        std::cout << "\n  Logger capabilities flag set: "
+                  << has_capability(logger->capabilities(), Capability::Logging) << "\n";
+
+        registry.shutdown_all();
+    }
+
+    std::cout << "\n";
+}
+
+// =============================================================================
+// PART 5: Test Bench
 // =============================================================================
 
 void separator(const std::string& title) {
@@ -650,26 +849,49 @@ registry.shutdown_all();
 }
 
 // =============================================================================
-// PART 5: main
+// PART 6: main
 // =============================================================================
 
-int main() {
-std::cout << "=================================================\n";
-std::cout << " Type Erasure — Plugin System Demo\n";
-std::cout << " codepuz.com\n";
-std::cout << "=================================================\n";
+static void print_usage(const char* prog) {
+    std::cout << "Usage: " << prog << " [-test]\n\n"
+              << "  (no flags)  Run usage examples that show the API in action\n"
+              << "  -test       Run the full test suite with assertions\n";
+}
 
+int main(int argc, char* argv[]) {
+    std::cout << "=================================================\n";
+    std::cout << " Type Erasure — Plugin System Demo\n";
+    std::cout << " codepuz.com\n";
+    std::cout << "=================================================\n";
 
-test_basic_pipeline();
-test_validation_halt();
-test_payload_too_long();
-test_multiple_messages();
-test_capability_filter();
-test_duplicate_registration();
-test_plugin_lookup();
+    // ── parse flags ───────────────────────────────────────────────────────
+    bool run_tests = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg(argv[i]);
+        if (arg == "-test" || arg == "--test") {
+            run_tests = true;
+        } else {
+            std::cerr << "Unknown flag: " << arg << "\n";
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
 
-std::cout << "\nAll tests passed.\n";
-return 0;
+    if (run_tests) {
+        // ── full test suite ───────────────────────────────────────────────
+        std::cout << "\nRunning test suite...\n";
+        test_basic_pipeline();
+        test_validation_halt();
+        test_payload_too_long();
+        test_multiple_messages();
+        test_capability_filter();
+        test_duplicate_registration();
+        test_plugin_lookup();
+        std::cout << "\nAll tests passed.\n";
+    } else {
+        // ── examples (default) ────────────────────────────────────────────
+        run_examples();
+    }
 
-
+    return 0;
 }
